@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>로그인 - 두바이쫀득쿠키</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- 로그인 화면 -->
+    <div id="loginView" class="login-container">
+        <div class="login-box">
+            <h2>두쫀쿠 판매카페 등록</h2>
+            
+            <button class="btn-google" onclick="signInWithGoogle()">
+                🔐 Google로 로그인
+            </button>
+            
+            <div class="divider">또는</div>
+            
+            <div id="alertBox"></div>
+            
+            <input type="email" id="email" placeholder="이메일" required>
+            <input type="password" id="password" placeholder="비밀번호" required>
+            
+            <button class="btn-primary" onclick="signInWithEmail()">이메일로 로그인</button>
+            <button class="btn-primary" onclick="signUpWithEmail()">이메일로 회원가입</button>
+            
+            <div style="text-align: center; margin-top: 15px;">
+                <a href="index.html" style="color: #666; text-decoration: none; font-size: 14px;">← 메인으로 돌아가기</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- 대시보드 화면 -->
+    <div id="dashboardView" class="dashboard-container" style="display: none;">
+        <div class="dashboard-header">
+            <h1>매장 관리</h1>
+            <button class="logout-btn" onclick="logout()">로그아웃</button>
+        </div>
+
+        <div class="dashboard-content">
+            <div id="dashboardAlert"></div>
+            
+            <!-- 실시간 재고 관리 -->
+            <div class="card">
+                <h3>실시간 재고 관리</h3>
+                <div class="inventory-control">
+                    <button onclick="decreaseInventory()">−</button>
+                    <input type="number" id="inventoryNumber" value="0" min="0" onchange="validateInventory()">
+                    <button onclick="increaseInventory()">+</button>
+                </div>
+                <button class="btn-save" onclick="saveInventory()">재고 저장</button>
+            </div>
+
+            <!-- 매장 정보 관리 -->
+            <div class="card">
+                <h3>매장 정보</h3>
+                
+                <div class="form-group">
+                    <label>대표 사진</label>
+                    <div class="file-upload" onclick="document.getElementById('mainImage').click()">
+                        <input type="file" id="mainImage" accept="image/*" onchange="previewImage(this, 'mainImagePreview')">
+                        <p>📷 클릭하여 사진 업로드</p>
+                        <div id="mainImagePreview" class="file-preview"></div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>매장 좌표 (위도, 경도)</label>
+                    <input type="text" id="location" placeholder="예: 37.5665, 126.9780">
+                    <small style="color: #666;">Google 지도에서 위치를 우클릭하여 좌표를 복사할 수 있습니다.</small>
+                </div>
+
+                <div class="form-group">
+                    <label>매장 주소</label>
+                    <input type="text" id="address" placeholder="서울시 강남구 ...">
+                </div>
+
+                <div class="form-group">
+                    <label>매장 이름</label>
+                    <input type="text" id="subject" placeholder="매장 이름">
+                </div>
+
+                <div class="form-group">
+                    <label>홍보 문구</label>
+                    <textarea id="plaintext" placeholder="매장에 대한 간단한 소개를 작성해주세요."></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label>연결 URL (선택)</label>
+                    <input type="url" id="url" placeholder="https://...">
+                </div>
+
+                <div class="form-group">
+                    <label>사업자등록증 사진</label>
+                    <div class="file-upload" onclick="document.getElementById('govImage').click()">
+                        <input type="file" id="govImage" accept="image/*" onchange="previewImage(this, 'govImagePreview')">
+                        <p>📄 클릭하여 사업자등록증 업로드</p>
+                        <div id="govImagePreview" class="file-preview"></div>
+                    </div>
+                </div>
+
+                <button class="btn-save" onclick="saveStoreInfo()">매장정보 저장</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <script src="config.js"></script>
+    <script>
+        // Supabase 클라이언트 초기화
+        const { createClient } = supabase;
+        const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        let currentUser = null;
+        let currentStoreId = null;
+
+        // 페이지 로드 시 세션 확인
+        window.addEventListener('load', async () => {
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            if (session) {
+                currentUser = session.user;
+                await showDashboard();
+            }
+        });
+
+        // Google 로그인
+        async function signInWithGoogle() {
+            try {
+                const { data, error } = await supabaseClient.auth.signInWithOAuth({
+                    provider: 'google',
+                    options: {
+                        redirectTo: window.location.href
+                    }
+                });
+                if (error) throw error;
+            } catch (error) {
+                showAlert('loginView', error.message, 'error');
+            }
+        }
+
+        // 이메일 로그인
+        async function signInWithEmail() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+
+            if (!email || !password) {
+                showAlert('loginView', '이메일과 비밀번호를 입력해주세요.', 'error');
+                return;
+            }
+
+            try {
+                const { data, error } = await supabaseClient.auth.signInWithPassword({
+                    email: email,
+                    password: password
+                });
+
+                if (error) throw error;
+
+                currentUser = data.user;
+                await showDashboard();
+            } catch (error) {
+                showAlert('loginView', error.message, 'error');
+            }
+        }
+
+        // 이메일 회원가입
+        async function signUpWithEmail() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+
+            if (!email || !password) {
+                showAlert('loginView', '이메일과 비밀번호를 입력해주세요.', 'error');
+                return;
+            }
+
+            if (password.length < 6) {
+                showAlert('loginView', '비밀번호는 최소 6자 이상이어야 합니다.', 'error');
+                return;
+            }
+
+            try {
+                const { data, error } = await supabaseClient.auth.signUp({
+                    email: email,
+                    password: password
+                });
+
+                if (error) throw error;
+
+                if (data.user) {
+                    showAlert('loginView', '회원가입이 완료되었습니다. 로그인해주세요.', 'success');
+                }
+            } catch (error) {
+                showAlert('loginView', error.message, 'error');
+            }
+        }
+
+        // 로그아웃
+        async function logout() {
+            await supabaseClient.auth.signOut();
+            currentUser = null;
+            currentStoreId = null;
+            document.getElementById('dashboardView').style.display = 'none';
+            document.getElementById('loginView').style.display = 'flex';
+        }
+
+        // 대시보드 표시
+        async function showDashboard() {
+            document.getElementById('loginView').style.display = 'none';
+            document.getElementById('dashboardView').style.display = 'block';
+            
+            // 기존 매장 정보 불러오기
+            await loadStoreData();
+        }
+
+        // 매장 데이터 불러오기
+        async function loadStoreData() {
+            try {
+                const { data, error } = await supabaseClient
+                    .from('doozonku')
+                    .select('*')
+                    .eq('user_id', currentUser.id)
+                    .maybeSingle();
+
+                if (error) {
+                    console.error('매장 데이터 로드 오류:', error);
+                    if (error.code === 'PGRST116') {
+                        console.log('기존 매장 정보 없음 (신규 등록)');
+                    } else {
+                        showAlert('dashboardView', `데이터 로드 오류: ${error.message}`, 'error');
+                    }
+                    return;
+                }
+
+                if (data) {
+                    currentStoreId = data.id;
+                    document.getElementById('inventoryNumber').value = data.number || 0;
+                    document.getElementById('location').value = data.location || '';
+                    document.getElementById('address').value = data.address || '';
+                    document.getElementById('subject').value = data.subject || '';
+                    document.getElementById('plaintext').value = data.plaintext || '';
+                    document.getElementById('url').value = data.url || '';
+                    
+                    if (data.img) {
+                        document.getElementById('mainImagePreview').innerHTML = `<img src="${data.img}">`;
+                    }
+                    if (data.gov) {
+                        document.getElementById('govImagePreview').innerHTML = `<img src="${data.gov}">`;
+                    }
+                }
+            } catch (error) {
+                console.error('예상치 못한 오류:', error);
+            }
+        }
+
+        // 재고 증가
+        function increaseInventory() {
+            const input = document.getElementById('inventoryNumber');
+            input.value = parseInt(input.value || 0) + 1;
+        }
+
+        // 재고 감소
+        function decreaseInventory() {
+            const input = document.getElementById('inventoryNumber');
+            const current = parseInt(input.value || 0);
+            if (current > 0) {
+                input.value = current - 1;
+            }
+        }
+
+        // 재고 유효성 검사
+        function validateInventory() {
+            const input = document.getElementById('inventoryNumber');
+            const value = parseInt(input.value || 0);
+            if (value < 0) {
+                input.value = 0;
+            }
+        }
+
+        // 재고만 저장
+        async function saveInventory() {
+            const number = parseInt(document.getElementById('inventoryNumber').value || 0);
+
+            if (!currentStoreId) {
+                showAlert('dashboardView', '먼저 매장 정보를 등록해주세요.', 'error');
+                return;
+            }
+
+            try {
+                const { error } = await supabaseClient
+                    .from('doozonku')
+                    .update({ number: number })
+                    .eq('id', currentStoreId);
+
+                if (error) throw error;
+
+                showAlert('dashboardView', '재고가 업데이트되었습니다!', 'success');
+            } catch (error) {
+                showAlert('dashboardView', '재고 업데이트 실패: ' + error.message, 'error');
+            }
+        }
+
+        // 이미지 미리보기
+        function previewImage(input, previewId) {
+            const preview = document.getElementById(previewId);
+            if (input.files && input.files[0]) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    preview.innerHTML = `<img src="${e.target.result}">`;
+                };
+                reader.readAsDataURL(input.files[0]);
+            }
+        }
+
+        // 이미지 업로드
+        async function uploadImage(file, path) {
+            const fileExt = file.name.split('.').pop();
+            const fileName = `${Math.random().toString(36).substring(2)}_${Date.now()}.${fileExt}`;
+            const filePath = `${path}/${fileName}`;
+
+            const { data, error } = await supabaseClient.storage
+                .from('doozonku-uploads')
+                .upload(filePath, file, {
+                    cacheControl: '3600',
+                    upsert: false
+                });
+
+            if (error) {
+                console.error('이미지 업로드 오류:', error);
+                throw new Error(`이미지 업로드 실패: ${error.message}`);
+            }
+
+            const { data: { publicUrl } } = supabaseClient.storage
+                .from('doozonku-uploads')
+                .getPublicUrl(filePath);
+
+            return publicUrl;
+        }
+
+        // 매장 정보 저장
+        async function saveStoreInfo() {
+            const location = document.getElementById('location').value.trim();
+            const address = document.getElementById('address').value.trim();
+            const subject = document.getElementById('subject').value.trim();
+            const plaintext = document.getElementById('plaintext').value.trim();
+            const url = document.getElementById('url').value.trim();
+            const number = parseInt(document.getElementById('inventoryNumber').value || 0);
+
+            if (!location || !address || !subject) {
+                showAlert('dashboardView', '필수 항목을 모두 입력해주세요.', 'error');
+                return;
+            }
+
+            try {
+                showAlert('dashboardView', '매장 정보를 저장하는 중...', 'info');
+
+                let imgUrl = null;
+                let govUrl = null;
+
+                // 이미지 업로드
+                const mainImageFile = document.getElementById('mainImage').files[0];
+                if (mainImageFile) {
+                    imgUrl = await uploadImage(mainImageFile, 'stores');
+                }
+
+                const govImageFile = document.getElementById('govImage').files[0];
+                if (govImageFile) {
+                    govUrl = await uploadImage(govImageFile, 'documents');
+                }
+
+                const storeData = {
+                    user_id: currentUser.id,
+                    location: location,
+                    address: address,
+                    subject: subject,
+                    plaintext: plaintext,
+                    url: url || null,
+                    number: number,
+                    checked: 'false'
+                };
+
+                if (imgUrl) storeData.img = imgUrl;
+                if (govUrl) storeData.gov = govUrl;
+
+                let result;
+                if (currentStoreId) {
+                    // 업데이트
+                    result = await supabaseClient
+                        .from('doozonku')
+                        .update(storeData)
+                        .eq('id', currentStoreId);
+                } else {
+                    // 신규 등록
+                    result = await supabaseClient
+                        .from('doozonku')
+                        .insert([storeData])
+                        .select();
+                    
+                    if (result.data && result.data[0]) {
+                        currentStoreId = result.data[0].id;
+                    }
+                }
+
+                if (result.error) throw result.error;
+
+                showAlert('dashboardView', '매장 정보가 저장되었습니다! 관리자 승인 후 지도에 표시됩니다.', 'success');
+            } catch (error) {
+                showAlert('dashboardView', '저장 실패: ' + error.message, 'error');
+            }
+        }
+
+        // 알림 메시지 표시
+        function showAlert(viewId, message, type) {
+            const alertBox = viewId === 'loginView' 
+                ? document.getElementById('alertBox')
+                : document.getElementById('dashboardAlert');
+            
+            alertBox.innerHTML = `<div class="alert alert-${type}">${message}</div>`;
+            
+            setTimeout(() => {
+                alertBox.innerHTML = '';
+            }, 5000);
+        }
+    </script>
+</body>
+</html>

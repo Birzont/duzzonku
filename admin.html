@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>관리자 페이지 - 두바이쫀득쿠키</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="admin-container">
+        <div class="admin-header">
+            <h1>매장 등록 승인 관리</h1>
+            <button class="logout-btn" onclick="logout()">로그아웃</button>
+        </div>
+
+        <div id="alertBox"></div>
+        
+        <div id="loading" class="loading">
+            <div class="spinner"></div>
+            <p>데이터를 불러오는 중...</p>
+        </div>
+
+        <div id="storeList" class="store-list" style="display: none;"></div>
+        
+        <div id="emptyState" style="display: none; text-align: center; padding: 60px 20px; color: #666;">
+            <h2>승인 대기 중인 매장이 없습니다</h2>
+            <p>새로운 등록 요청이 있을 때 여기에 표시됩니다.</p>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <script src="config.js"></script>
+    <script>
+        // Supabase 클라이언트 초기화
+        const { createClient } = supabase;
+        const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        let currentUser = null;
+
+        // 페이지 로드 시 권한 확인
+        window.addEventListener('load', async () => {
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            
+            if (!session) {
+                alert('로그인이 필요합니다.');
+                window.location.href = 'login.html';
+                return;
+            }
+
+            currentUser = session.user;
+
+            // 관리자 권한 확인
+            if (currentUser.email !== ADMIN_EMAIL) {
+                alert('관리자 권한이 없습니다.');
+                window.location.href = 'index.html';
+                return;
+            }
+
+            loadPendingStores();
+        });
+
+        // 승인 대기 중인 매장 목록 로드
+        async function loadPendingStores() {
+            try {
+                document.getElementById('loading').style.display = 'block';
+                document.getElementById('storeList').style.display = 'none';
+                document.getElementById('emptyState').style.display = 'none';
+
+                const { data, error } = await supabaseClient
+                    .from('doozonku')
+                    .select('*')
+                    .or('checked.is.null,checked.eq.false,checked.eq.')
+                    .order('created_at', { ascending: false });
+
+                document.getElementById('loading').style.display = 'none';
+
+                if (error) throw error;
+
+                if (data && data.length > 0) {
+                    displayStores(data);
+                } else {
+                    document.getElementById('emptyState').style.display = 'block';
+                }
+            } catch (error) {
+                document.getElementById('loading').style.display = 'none';
+                showAlert('데이터 로드 실패: ' + error.message, 'error');
+            }
+        }
+
+        // 매장 목록 표시
+        function displayStores(stores) {
+            const storeList = document.getElementById('storeList');
+            storeList.style.display = 'grid';
+            storeList.innerHTML = '';
+
+            stores.forEach(store => {
+                const storeItem = document.createElement('div');
+                storeItem.className = 'store-item';
+                storeItem.innerHTML = `
+                    <div class="store-item-header">
+                        ${store.img ? `<img src="${store.img}" class="store-item-image" alt="${store.subject}">` : ''}
+                        <div class="store-item-info">
+                            <h3>${store.subject || '매장명 없음'}</h3>
+                            <p><strong>주소:</strong> ${store.address || '-'}</p>
+                            <p><strong>좌표:</strong> ${store.location || '-'}</p>
+                            <p><strong>재고:</strong> ${store.number || 0}개</p>
+                            <p><strong>홍보 문구:</strong> ${store.plaintext || '-'}</p>
+                            ${store.url ? `<p><strong>URL:</strong> <a href="${store.url}" target="_blank">${store.url}</a></p>` : ''}
+                            <p><strong>등록일:</strong> ${store.created_at ? new Date(store.created_at).toLocaleString('ko-KR') : '-'}</p>
+                        </div>
+                    </div>
+                    <div class="store-item-actions">
+                        ${store.gov ? `<button class="btn-view" onclick="viewDocument('${store.gov}')">사업자등록증 보기</button>` : '<span style="color: #999;">사업자등록증 없음</span>'}
+                        <button class="btn-approve" onclick="approveStore('${store.id}')">✓ 승인</button>
+                        <button class="btn-reject" onclick="rejectStore('${store.id}')">✗ 거절</button>
+                    </div>
+                `;
+                storeList.appendChild(storeItem);
+            });
+        }
+
+        // 사업자등록증 보기
+        function viewDocument(url) {
+            window.open(url, '_blank');
+        }
+
+        // 매장 승인
+        async function approveStore(storeId) {
+            if (!confirm('이 매장을 지도에 표시하시겠습니까?')) {
+                return;
+            }
+
+            try {
+                const { error } = await supabaseClient
+                    .from('doozonku')
+                    .update({ checked: 'true' })
+                    .eq('id', storeId);
+
+                if (error) throw error;
+
+                showAlert('매장이 승인되었습니다.', 'success');
+                loadPendingStores();
+            } catch (error) {
+                showAlert('승인 실패: ' + error.message, 'error');
+            }
+        }
+
+        // 매장 거절 (삭제)
+        async function rejectStore(storeId) {
+            if (!confirm('이 매장 등록 요청을 거절하시겠습니까? (삭제됩니다)')) {
+                return;
+            }
+
+            try {
+                const { error } = await supabaseClient
+                    .from('doozonku')
+                    .delete()
+                    .eq('id', storeId);
+
+                if (error) throw error;
+
+                showAlert('매장 등록 요청이 거절되었습니다.', 'success');
+                loadPendingStores();
+            } catch (error) {
+                showAlert('거절 실패: ' + error.message, 'error');
+            }
+        }
+
+        // 로그아웃
+        async function logout() {
+            await supabaseClient.auth.signOut();
+            window.location.href = 'index.html';
+        }
+
+        // 알림 메시지
+        function showAlert(message, type) {
+            const alertBox = document.getElementById('alertBox');
+            alertBox.innerHTML = `<div class="alert alert-${type}">${message}</div>`;
+            
+            setTimeout(() => {
+                alertBox.innerHTML = '';
+            }, 5000);
+        }
+    </script>
+</body>
+</html>
