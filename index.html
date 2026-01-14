@@ -12,7 +12,8 @@
             const script = document.createElement('script');
             script.type = 'text/javascript';
             // ncpClientId 대신 ncpKeyId 사용 (NAVER 문서 기준)
-            script.src = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${NAVER_MAP_CLIENT_ID}`;
+            // 클러스터링 사용을 위해 submodules=clustering 포함
+            script.src = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${NAVER_MAP_CLIENT_ID}&submodules=clustering`;
             document.head.appendChild(script);
         })();
     </script>
@@ -37,6 +38,11 @@
         let markers = [];
         let infoWindows = [];
         let stores = [];
+        let markerCluster = null;
+
+        // 줌이 이 값보다 작거나 같으면 클러스터(큰 원) 표시
+        // (원하시면 “확대할수록 큰 원” 동작으로 반대로도 바꿔드릴게요)
+        const CLUSTER_MAX_ZOOM = 13;
 
         // 페이지 로드 시 지도 초기화
         window.onload = function() {
@@ -65,8 +71,29 @@
                 }
             });
 
+            setupClusterZoomToggle();
+            setupMapClickToCloseInfoWindows();
             loadStores();
             setupSearch();
+        }
+
+        // 지도 빈 곳 클릭 시 모든 카드(정보창) 닫기
+        function setupMapClickToCloseInfoWindows() {
+            naver.maps.Event.addListener(map, 'click', function() {
+                infoWindows.forEach(iw => iw.close());
+            });
+        }
+
+        function setupClusterZoomToggle() {
+            naver.maps.Event.addListener(map, 'zoom_changed', function() {
+                if (!markerCluster) return;
+                const z = map.getZoom();
+                if (z <= CLUSTER_MAX_ZOOM) {
+                    markerCluster.setMap(map);
+                } else {
+                    markerCluster.setMap(null);
+                }
+            });
         }
 
         // 매장 데이터 로드
@@ -93,6 +120,10 @@
             markers = [];
             infoWindows.forEach(infoWindow => infoWindow.close());
             infoWindows = [];
+            if (markerCluster) {
+                markerCluster.setMap(null);
+                markerCluster = null;
+            }
 
             storeList.forEach(store => {
                 if (!store.location) return;
@@ -161,6 +192,8 @@
                         anchor: new naver.maps.Point(20, 50)
                     }
                 });
+                // 클러스터 합산용 값 저장
+                marker.set('inventory', number);
 
                 // 정보창 내용
                 const infoWindowContent = `
@@ -190,6 +223,12 @@
                 naver.maps.Event.addListener(marker, 'click', function() {
                     // 다른 정보창 닫기
                     infoWindows.forEach(iw => iw.close());
+
+                    // 카드(정보창)를 보기 좋게 배치하기 위해
+                    // - 가로: 거의 중앙
+                    // - 세로: 화면 중간보다 약간 아래쪽에 마커가 오도록 살짝 위로 올린 중심으로 이동
+                    moveCenterForInfoWindow(marker.getPosition());
+
                     // 현재 정보창 열기
                     infoWindow.open(map, marker);
                 });
@@ -197,6 +236,76 @@
                 markers.push(marker);
                 infoWindows.push(infoWindow);
             });
+
+            // 클러스터(큰 원) 생성: “그 지역의 숫자 합(재고 합계)” 표시
+            // - 줌이 작을 때(멀리 볼 때) 클러스터를 보여주는 것이 일반적입니다.
+            markerCluster = new MarkerClustering({
+                minClusterSize: 2,
+                maxZoom: CLUSTER_MAX_ZOOM,
+                map: map,
+                markers: markers,
+                disableClickZoom: false,
+                gridSize: 120,
+                // 클러스터 아이콘은 HTML로 커스텀 (큰 원 + 합계 숫자)
+                icons: [createSumClusterIcon('#ffffff', '#111111')],
+                indexGenerator: [10, 100, 200, 500, 1000],
+                stylingFunction: function(clusterMarker, count) {
+                    // count는 “마커 개수”라서, 우리는 아래 calculator에서 합계를 만들어 content에 넣습니다.
+                    // 여기서는 추가 스타일이 필요할 때만 사용.
+                    clusterMarker.getElement().style.cursor = 'pointer';
+                },
+                calculator: function(markerArray) {
+                    // markerArray는 클러스터에 포함된 마커 배열
+                    const sum = markerArray.reduce((acc, m) => acc + (parseInt(m.get('inventory')) || 0), 0);
+                    // 아이콘 HTML 내부 텍스트를 sum으로 바꿔치기하기 위해,
+                    // MarkerClustering의 calculator 반환값을 index + text 둘 다 활용합니다.
+                    // (index는 icons 배열 인덱스 선택용)
+                    return {
+                        text: String(sum),
+                        index: 0
+                    };
+                }
+            });
+
+            // 초기 줌에 따른 표시 토글
+            if (map.getZoom() > CLUSTER_MAX_ZOOM) {
+                markerCluster.setMap(null);
+            }
+        }
+
+        // 마커를 가로 방향으로만 화면 중앙에 오도록 지도 중심을 조정
+        function moveCenterForInfoWindow(latlng) {
+            // 사용자가 요청한 대로, 세로 위치는 건드리지 않고
+            // 마커 좌표를 그대로 중심으로 이동
+            map.panTo(latlng);
+        }
+
+        function createSumClusterIcon(bgColor, textColor) {
+            // MarkerClustering은 “text”가 들어갈 요소를 `.cluster-text`로 찾습니다.
+            // 그래서 content 내부에 해당 클래스를 넣어줍니다.
+            return {
+                content: `
+                    <div style="
+                        width: 64px;
+                        height: 64px;
+                        border-radius: 50%;
+                        background: ${bgColor};
+                        border: 4px solid rgba(0,0,0,0.15);
+                        box-shadow: 0 6px 16px rgba(0,0,0,0.25);
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        font-weight: 800;
+                        font-size: 18px;
+                        color: ${textColor};
+                        user-select: none;
+                    ">
+                        <span class="cluster-text">0</span>
+                    </div>
+                `,
+                size: new naver.maps.Size(64, 64),
+                anchor: new naver.maps.Point(32, 32)
+            };
         }
 
         // 검색 기능
