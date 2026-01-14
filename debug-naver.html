@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>네이버 지도 디버깅</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .info { background: #f0f0f0; padding: 15px; margin-bottom: 20px; border-radius: 5px; }
+        .error { background: #ffe0e0; padding: 15px; margin-bottom: 20px; border-radius: 5px; color: #c00; }
+        .success { background: #e0ffe0; padding: 15px; margin-bottom: 20px; border-radius: 5px; color: #0c0; }
+        #map { width: 100%; height: 400px; border: 2px solid #ccc; margin-top: 20px; }
+    </style>
+    <script src="config.js"></script>
+</head>
+<body>
+    <h1>네이버 지도 API 디버깅</h1>
+    
+    <div class="info">
+        <h3>설정 정보</h3>
+        <p><strong>Client ID:</strong> <span id="clientId"></span></p>
+        <p><strong>Current URL:</strong> <span id="currentUrl"></span></p>
+        <p><strong>Protocol:</strong> <span id="protocol"></span></p>
+        <p><strong>Host:</strong> <span id="host"></span></p>
+        <p><strong>Port:</strong> <span id="port"></span></p>
+    </div>
+
+    <div id="status" class="info">로딩 중...</div>
+    <div id="map"></div>
+
+    <script>
+        // 설정 정보 표시
+        document.getElementById('clientId').textContent = NAVER_MAP_CLIENT_ID;
+        document.getElementById('currentUrl').textContent = window.location.href;
+        document.getElementById('protocol').textContent = window.location.protocol;
+        document.getElementById('host').textContent = window.location.host;
+        document.getElementById('port').textContent = window.location.port || '80 (default)';
+
+        const statusDiv = document.getElementById('status');
+        
+        // 네이버 지도 스크립트 로드 (ncpKeyId 사용)
+        const script = document.createElement('script');
+        script.src = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${NAVER_MAP_CLIENT_ID}`;
+        
+        script.onload = function() {
+            console.log('스크립트 로드 완료');
+            console.log('naver 객체:', naver);
+            console.log('naver.maps:', naver ? naver.maps : 'naver is undefined');
+            
+            setTimeout(() => {
+                if (typeof naver === 'undefined') {
+                    statusDiv.className = 'error';
+                    statusDiv.innerHTML = '<h3>❌ 실패</h3><p>naver 객체가 정의되지 않았습니다.</p>';
+                    return;
+                }
+                
+                if (naver.maps === null) {
+                    statusDiv.className = 'error';
+                    statusDiv.innerHTML = `
+                        <h3>❌ 인증 실패</h3>
+                        <p><strong>문제:</strong> 네이버 지도 API 인증이 실패했습니다.</p>
+                        <h4>확인 사항:</h4>
+                        <ul>
+                            <li>네이버 클라우드 콘솔에서 Application 상태가 "활성"인지 확인</li>
+                            <li>서비스 탭에서 "Web Dynamic Map"이 체크되어 있는지 확인</li>
+                            <li>서비스 환경 탭에서 Web 서비스 URL이 <code>http://localhost:8000</code> (슬래시 없이)로 등록되어 있는지 확인</li>
+                            <li>클라이언트 ID가 정확한지 확인</li>
+                        </ul>
+                        <h4>해결 방법:</h4>
+                        <ol>
+                            <li>네이버 클라우드 콘솔에서 Application을 삭제하고 새로 생성</li>
+                            <li>Web 서비스 URL에 <code>http://localhost:8000</code> (슬래시 없이) 등록</li>
+                            <li>새로 생성된 Client ID를 config.js에 입력</li>
+                            <li>설정 변경 후 1-2분 대기</li>
+                        </ol>
+                    `;
+                } else {
+                    try {
+                        const map = new naver.maps.Map('map', {
+                            center: new naver.maps.LatLng(37.5665, 126.9780),
+                            zoom: 12
+                        });
+                        
+                        statusDiv.className = 'success';
+                        statusDiv.innerHTML = '<h3>✅ 성공!</h3><p>네이버 지도가 정상적으로 로드되었습니다.</p>';
+                    } catch (error) {
+                        statusDiv.className = 'error';
+                        statusDiv.innerHTML = `<h3>❌ 지도 초기화 실패</h3><p>${error.message}</p>`;
+                    }
+                }
+            }, 100);
+        };
+        
+        script.onerror = function() {
+            statusDiv.className = 'error';
+            statusDiv.innerHTML = '<h3>❌ 스크립트 로드 실패</h3><p>네이버 지도 스크립트를 불러올 수 없습니다.</p>';
+        };
+        
+        document.head.appendChild(script);
+    </script>
+</body>
+</html>

@@ -5,6 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>두바이쫀득쿠키 파는곳</title>
     <link rel="stylesheet" href="styles.css">
+    <script src="config.js"></script>
+    <script>
+        // config.js 로드 후 네이버 지도 스크립트 동적 추가
+        (function() {
+            const script = document.createElement('script');
+            script.type = 'text/javascript';
+            // ncpClientId 대신 ncpKeyId 사용 (NAVER 문서 기준)
+            script.src = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${NAVER_MAP_CLIENT_ID}`;
+            document.head.appendChild(script);
+        })();
+    </script>
 </head>
 <body>
     <div class="topnav">
@@ -16,7 +27,6 @@
     
     <div id="map"></div>
 
-    <script src="config.js"></script>
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
     <script>
         // Supabase 클라이언트 초기화
@@ -27,39 +37,18 @@
         let markers = [];
         let infoWindows = [];
         let stores = [];
-        let naverMapLoaded = false;
-
-        // 네이버 지도 스크립트 동적 로드
-        function loadNaverMapScript() {
-            return new Promise((resolve, reject) => {
-                if (naverMapLoaded) {
-                    resolve();
-                    return;
-                }
-
-                const script = document.createElement('script');
-                script.type = 'text/javascript';
-                script.src = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpClientId=${NAVER_MAP_CLIENT_ID}`;
-                script.onload = () => {
-                    naverMapLoaded = true;
-                    resolve();
-                };
-                script.onerror = () => {
-                    reject(new Error('네이버 지도 스크립트 로드 실패'));
-                };
-                document.head.appendChild(script);
-            });
-        }
 
         // 페이지 로드 시 지도 초기화
-        window.onload = async function() {
-            try {
-                await loadNaverMapScript();
-                initMap();
-            } catch (error) {
-                console.error('지도 로드 오류:', error);
+        window.onload = function() {
+            // 네이버 지도가 로드되었는지 확인
+            if (typeof naver === 'undefined' || typeof naver.maps === 'undefined') {
+                console.error('네이버 지도 API가 로드되지 않았습니다.');
                 alert('지도를 불러올 수 없습니다. 네이버 지도 API 설정을 확인해주세요.');
+                return;
             }
+            
+            console.log('네이버 지도 API 로드 완료');
+            initMap();
         };
 
         // 네이버 지도 초기화

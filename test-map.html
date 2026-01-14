@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>네이버 지도 테스트</title>
+    <style>
+        #map { width: 100%; height: 100vh; }
+        body { margin: 0; padding: 0; }
+        .info { padding: 20px; background: #f0f0f0; }
+    </style>
+</head>
+<body>
+    <div class="info">
+        <h2>네이버 지도 API 테스트</h2>
+        <p>Client ID: <strong id="clientId"></strong></p>
+        <p>Current URL: <strong id="currentUrl"></strong></p>
+        <p id="status">로딩 중...</p>
+    </div>
+    <div id="map"></div>
+
+    <script src="config.js"></script>
+    <script>
+        document.getElementById('clientId').textContent = NAVER_MAP_CLIENT_ID;
+        document.getElementById('currentUrl').textContent = window.location.href;
+
+        const script = document.createElement('script');
+        // ncpClientId 대신 ncpKeyId 사용
+        script.src = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${NAVER_MAP_CLIENT_ID}`;
+        
+        script.onload = function() {
+            document.getElementById('status').textContent = '✅ 스크립트 로드 성공! 지도를 초기화합니다...';
+            
+            try {
+                const map = new naver.maps.Map('map', {
+                    center: new naver.maps.LatLng(37.5665, 126.9780),
+                    zoom: 12
+                });
+                
+                document.getElementById('status').textContent = '✅ 지도 초기화 성공!';
+                document.getElementById('status').style.color = 'green';
+            } catch (error) {
+                document.getElementById('status').textContent = '❌ 지도 초기화 실패: ' + error.message;
+                document.getElementById('status').style.color = 'red';
+                console.error('지도 초기화 오류:', error);
+            }
+        };
+        
+        script.onerror = function() {
+            document.getElementById('status').textContent = '❌ 스크립트 로드 실패!';
+            document.getElementById('status').style.color = 'red';
+        };
+        
+        document.head.appendChild(script);
+    </script>
+</body>
+</html>
