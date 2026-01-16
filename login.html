@@ -10,6 +10,9 @@
     <!-- 로그인 화면 -->
     <div id="loginView" class="login-container">
         <div class="login-box">
+            <a href="index.html" style="display: block; text-align: center;">
+                <img src="logo.png" alt="두쫀쿠" class="login-logo">
+            </a>
             <h2>두쫀쿠 판매카페 등록</h2>
             
             <button class="btn-google" onclick="signInWithGoogle()">
@@ -23,11 +26,10 @@
             <input type="email" id="email" placeholder="이메일" required>
             <input type="password" id="password" placeholder="비밀번호" required>
             
-            <button class="btn-primary" onclick="signInWithEmail()">이메일로 로그인</button>
-            <button class="btn-primary" onclick="signUpWithEmail()">이메일로 회원가입</button>
+            <button class="btn-primary" onclick="signInWithEmail()">로그인</button>
             
             <div style="text-align: center; margin-top: 15px;">
-                <a href="index.html" style="color: #666; text-decoration: none; font-size: 14px;">← 메인으로 돌아가기</a>
+                <a href="#" onclick="signUpWithEmail(); return false;" style="color: #666; text-decoration: none; font-size: 14px;">이메일로 사장님 계정 만들기</a>
             </div>
         </div>
     </div>
@@ -35,6 +37,11 @@
     <!-- 대시보드 화면 -->
     <div id="dashboardView" class="dashboard-container" style="display: none;">
         <div class="dashboard-header">
+            <div class="dashboard-logo-container">
+                <a href="index.html">
+                    <img src="logo.png" alt="두쫀쿠" class="dashboard-logo">
+                </a>
+            </div>
             <h1>매장 관리</h1>
             <button class="logout-btn" onclick="logout()">로그아웃</button>
         </div>
@@ -42,15 +49,33 @@
         <div class="dashboard-content">
             <div id="dashboardAlert"></div>
             
+            <!-- 매장 연결 카드 (매장 정보가 없는 사용자에게만 표시) -->
+            <div id="storeConnectCard" class="card store-connect-card" style="display: none;">
+                <img src="duzonkus.png" alt="두쫀쿠" style="width: 100%; max-width: 120px; margin: 0 auto 20px; display: block;">
+                <h3 style="text-align: center; margin-bottom: 10px; font-size: 22px;">이미 안내받은 매장이 있으신가요?</h3>
+                <p style="text-align: center; color: #999; font-size: 14px; margin-bottom: 20px;">
+                    관리자 또는 사장님으로부터 받은 매장 코드를 입력해 편집권한을 갖습니다
+                </p>
+                <div class="form-group">
+                    <input type="text" id="storeCodeTop" placeholder="관리자 또는 사장님이 발급한 매장 코드를 입력하세요">
+                </div>
+                <button class="btn-save" onclick="connectStoreFromTop()">매장 연결</button>
+            </div>
+            
             <!-- 실시간 재고 관리 -->
-            <div class="card">
+            <div class="card inventory-card">
                 <h3>실시간 재고 관리</h3>
+                <div id="inventoryUpdateTime" class="inventory-update-time"></div>
                 <div class="inventory-control">
                     <button onclick="decreaseInventory()">−</button>
                     <input type="number" id="inventoryNumber" value="0" min="0" onchange="validateInventory()">
                     <button onclick="increaseInventory()">+</button>
                 </div>
-                <button class="btn-save" onclick="saveInventory()">재고 저장</button>
+                <div class="form-group" style="margin-top: 20px;">
+                    <label>홍보 문구</label>
+                    <textarea id="plaintextInventory" placeholder="매장에 대한 간단한 소개를 작성해주세요." oninput="syncPlaintextFromInventory()" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; font-family: inherit; resize: vertical; min-height: 80px;"></textarea>
+                </div>
+                <button class="btn-save" onclick="saveInventory()">재고 업데이트</button>
             </div>
 
             <!-- 매장 정보 관리 -->
@@ -84,7 +109,7 @@
 
                 <div class="form-group">
                     <label>홍보 문구</label>
-                    <textarea id="plaintext" placeholder="매장에 대한 간단한 소개를 작성해주세요."></textarea>
+                    <textarea id="plaintext" placeholder="매장에 대한 간단한 소개를 작성해주세요." oninput="syncPlaintext()"></textarea>
                 </div>
 
                 <div class="form-group">
@@ -102,6 +127,35 @@
                 </div>
 
                 <button class="btn-save" onclick="saveStoreInfo()">매장정보 저장</button>
+            </div>
+
+            <!-- 로그인 정보 관리 -->
+            <div class="card">
+                <h3>로그인 정보</h3>
+                
+                <div class="form-group">
+                    <label>이메일 주소</label>
+                    <input type="email" id="userEmail" readonly style="background-color: #f5f5f5; cursor: not-allowed;">
+                    <small style="color: #666;">이메일 주소는 변경할 수 없습니다.</small>
+                </div>
+
+                <div id="connectedStoreInfo" class="form-group" style="display: none;">
+                    <label>연결된 매장</label>
+                    <input type="text" id="connectedStoreName" readonly style="background-color: #f5f5f5; cursor: not-allowed;">
+                    <small style="color: #28a745;">✓ 매장이 연결되었습니다. 매장 정보를 관리할 수 있습니다.</small>
+                </div>
+
+                <div class="form-group">
+                    <label>새 비밀번호</label>
+                    <input type="password" id="newPassword" placeholder="새 비밀번호 (최소 6자)">
+                </div>
+
+                <div class="form-group">
+                    <label>새 비밀번호 확인</label>
+                    <input type="password" id="newPasswordConfirm" placeholder="새 비밀번호 다시 입력">
+                </div>
+
+                <button class="btn-save" onclick="changePassword()">비밀번호 변경</button>
             </div>
         </div>
     </div>
@@ -210,6 +264,11 @@
             document.getElementById('loginView').style.display = 'none';
             document.getElementById('dashboardView').style.display = 'block';
             
+            // 이메일 주소 표시
+            if (currentUser && currentUser.email) {
+                document.getElementById('userEmail').value = currentUser.email;
+            }
+            
             // 기존 매장 정보 불러오기
             await loadStoreData();
         }
@@ -217,10 +276,11 @@
         // 매장 데이터 불러오기
         async function loadStoreData() {
             try {
+                // user_id부터 user_id_6까지 현재 사용자인 매장 찾기
                 const { data, error } = await supabaseClient
                     .from('doozonku')
                     .select('*')
-                    .eq('user_id', currentUser.id)
+                    .or(`user_id.eq.${currentUser.id},user_id_2.eq.${currentUser.id},user_id_3.eq.${currentUser.id},user_id_4.eq.${currentUser.id},user_id_5.eq.${currentUser.id},user_id_6.eq.${currentUser.id}`)
                     .maybeSingle();
 
                 if (error) {
@@ -240,7 +300,18 @@
                     document.getElementById('address').value = data.address || '';
                     document.getElementById('subject').value = data.subject || '';
                     document.getElementById('plaintext').value = data.plaintext || '';
+                    document.getElementById('plaintextInventory').value = data.plaintext || '';
                     document.getElementById('url').value = data.url || '';
+                    
+                    // 업데이트 시간 표시
+                    if (data.updated_at) {
+                        updateInventoryTime(data.updated_at);
+                    }
+                    
+                    // 연결된 매장 정보 표시
+                    document.getElementById('storeConnectCard').style.display = 'none';
+                    document.getElementById('connectedStoreInfo').style.display = 'block';
+                    document.getElementById('connectedStoreName').value = data.subject || '연결된 매장';
                     
                     if (data.img) {
                         document.getElementById('mainImagePreview').innerHTML = `<img src="${data.img}">`;
@@ -248,6 +319,10 @@
                     if (data.gov) {
                         document.getElementById('govImagePreview').innerHTML = `<img src="${data.gov}">`;
                     }
+                } else {
+                    // 매장이 없으면 상단 매장 연결 카드 표시
+                    document.getElementById('storeConnectCard').style.display = 'block';
+                    document.getElementById('connectedStoreInfo').style.display = 'none';
                 }
             } catch (error) {
                 console.error('예상치 못한 오류:', error);
@@ -278,9 +353,54 @@
             }
         }
 
+        // 시간 포맷팅 함수 (몇 분/시간/일 전)
+        function formatTimeAgo(dateString) {
+            if (!dateString) return '';
+            
+            const now = new Date();
+            const date = new Date(dateString);
+            const diffMs = now - date;
+            const diffMins = Math.floor(diffMs / 60000);
+            const diffHours = Math.floor(diffMs / 3600000);
+            const diffDays = Math.floor(diffMs / 86400000);
+
+            if (diffMins < 1) {
+                return '방금 전 업데이트';
+            } else if (diffMins < 60) {
+                return `${diffMins}분 전 업데이트`;
+            } else if (diffHours < 24) {
+                return `${diffHours}시간 전 업데이트`;
+            } else {
+                return `${diffDays}일 전 업데이트`;
+            }
+        }
+
+        // 업데이트 시간 표시
+        function updateInventoryTime(updatedAt) {
+            const timeElement = document.getElementById('inventoryUpdateTime');
+            if (timeElement && updatedAt) {
+                timeElement.textContent = formatTimeAgo(updatedAt);
+            } else if (timeElement) {
+                timeElement.textContent = '';
+            }
+        }
+
+        // 홍보 문구 동기화 (매장 정보의 홍보 문구와 실시간 재고 관리의 홍보 문구 동기화)
+        function syncPlaintext() {
+            const plaintextValue = document.getElementById('plaintext').value;
+            document.getElementById('plaintextInventory').value = plaintextValue;
+        }
+
+        // 실시간 재고 관리의 홍보 문구 변경 시 매장 정보의 홍보 문구도 동기화
+        function syncPlaintextFromInventory() {
+            const plaintextValue = document.getElementById('plaintextInventory').value;
+            document.getElementById('plaintext').value = plaintextValue;
+        }
+
         // 재고만 저장
         async function saveInventory() {
             const number = parseInt(document.getElementById('inventoryNumber').value || 0);
+            const plaintext = document.getElementById('plaintextInventory').value.trim();
 
             if (!currentStoreId) {
                 showAlert('dashboardView', '먼저 매장 정보를 등록해주세요.', 'error');
@@ -288,12 +408,22 @@
             }
 
             try {
-                const { error } = await supabaseClient
+                const { data, error } = await supabaseClient
                     .from('doozonku')
-                    .update({ number: number })
-                    .eq('id', currentStoreId);
+                    .update({ number: number, plaintext: plaintext })
+                    .eq('id', currentStoreId)
+                    .select('updated_at')
+                    .single();
 
                 if (error) throw error;
+
+                // 업데이트 시간 표시
+                if (data && data.updated_at) {
+                    updateInventoryTime(data.updated_at);
+                } else {
+                    // updated_at이 없으면 현재 시간 사용
+                    updateInventoryTime(new Date().toISOString());
+                }
 
                 showAlert('dashboardView', '재고가 업데이트되었습니다!', 'success');
             } catch (error) {
@@ -407,6 +537,163 @@
                 showAlert('dashboardView', '매장 정보가 저장되었습니다! 관리자 승인 후 지도에 표시됩니다.', 'success');
             } catch (error) {
                 showAlert('dashboardView', '저장 실패: ' + error.message, 'error');
+            }
+        }
+
+        // 상단 카드에서 매장 코드로 매장 연결
+        async function connectStoreFromTop() {
+            const storeCode = document.getElementById('storeCodeTop').value.trim();
+            if (!storeCode) {
+                showAlert('dashboardView', '매장 코드를 입력해주세요.', 'error');
+                return;
+            }
+            await connectStore(storeCode, 'storeCodeTop');
+        }
+
+        // 매장 코드로 매장 연결
+        async function connectStore(storeCodeInput = null, inputId = null) {
+            const storeCode = storeCodeInput || (inputId ? document.getElementById(inputId).value.trim() : '');
+
+            if (!storeCode) {
+                showAlert('dashboardView', '매장 코드를 입력해주세요.', 'error');
+                return;
+            }
+
+            if (!currentUser) {
+                showAlert('dashboardView', '로그인이 필요합니다.', 'error');
+                return;
+            }
+
+            try {
+                // 매장 코드로 매장 찾기 (RLS 정책을 우회하기 위해 서버 함수를 사용하거나, 
+                // 관리자가 미리 설정한 매장 코드로 찾기)
+                // 일단 직접 조회 시도 (승인된 매장은 모두 볼 수 있으므로)
+                const { data: storeData, error: findError } = await supabaseClient
+                    .from('doozonku')
+                    .select('*')
+                    .eq('store_code', storeCode)
+                    .maybeSingle();
+
+                if (findError) {
+                    throw findError;
+                }
+
+                if (!storeData) {
+                    showAlert('dashboardView', '매장 코드가 올바르지 않습니다. 관리자에게 문의하세요.', 'error');
+                    return;
+                }
+
+                // 이미 현재 사용자에게 연결되어 있는지 확인
+                if (storeData.user_id === currentUser.id || 
+                    storeData.user_id_2 === currentUser.id ||
+                    storeData.user_id_3 === currentUser.id ||
+                    storeData.user_id_4 === currentUser.id ||
+                    storeData.user_id_5 === currentUser.id ||
+                    storeData.user_id_6 === currentUser.id) {
+                    showAlert('dashboardView', '이미 이 매장에 연결되어 있습니다.', 'info');
+                    await loadStoreData();
+                    return;
+                }
+
+                // 이미 6명이 연결되어 있는지 확인
+                if (storeData.user_id && storeData.user_id_2 && storeData.user_id_3 && 
+                    storeData.user_id_4 && storeData.user_id_5 && storeData.user_id_6) {
+                    showAlert('dashboardView', '이 매장은 이미 6명의 사용자에게 연결되어 있습니다. (최대 6명)', 'error');
+                    return;
+                }
+
+                // 매장의 user_id부터 user_id_6까지 빈 자리에 현재 사용자 추가
+                let updateData;
+                let updateError;
+                let updateField = {};
+                
+                if (!storeData.user_id) {
+                    updateField = { user_id: currentUser.id };
+                } else if (!storeData.user_id_2) {
+                    updateField = { user_id_2: currentUser.id };
+                } else if (!storeData.user_id_3) {
+                    updateField = { user_id_3: currentUser.id };
+                } else if (!storeData.user_id_4) {
+                    updateField = { user_id_4: currentUser.id };
+                } else if (!storeData.user_id_5) {
+                    updateField = { user_id_5: currentUser.id };
+                } else if (!storeData.user_id_6) {
+                    updateField = { user_id_6: currentUser.id };
+                } else {
+                    // 이미 6명이 연결되어 있음 (위에서 체크했지만 안전장치)
+                    showAlert('dashboardView', '이 매장은 이미 6명의 사용자에게 연결되어 있습니다. (최대 6명)', 'error');
+                    return;
+                }
+
+                const result = await supabaseClient
+                    .from('doozonku')
+                    .update(updateField)
+                    .eq('store_code', storeCode)
+                    .eq('id', storeData.id)
+                    .select()
+                    .single();
+                updateData = result.data;
+                updateError = result.error;
+
+                if (updateError) {
+                    // RLS 정책 때문에 업데이트가 안 될 수 있음
+                    // 이 경우 관리자에게 문의하도록 안내
+                    console.error('매장 연결 오류:', updateError);
+                    showAlert('dashboardView', '매장 연결에 실패했습니다. 관리자에게 문의하세요. 오류: ' + updateError.message, 'error');
+                    return;
+                }
+
+                // 연결 성공
+                currentStoreId = updateData.id;
+                showAlert('dashboardView', '매장이 성공적으로 연결되었습니다!', 'success');
+                
+                // 입력 필드 초기화
+                if (inputId === 'storeCodeTop') {
+                    document.getElementById('storeCodeTop').value = '';
+                }
+                
+                // 매장 데이터 다시 불러오기
+                await loadStoreData();
+            } catch (error) {
+                console.error('매장 연결 오류:', error);
+                showAlert('dashboardView', '매장 연결 실패: ' + error.message, 'error');
+            }
+        }
+
+        // 비밀번호 변경
+        async function changePassword() {
+            const newPassword = document.getElementById('newPassword').value;
+            const newPasswordConfirm = document.getElementById('newPasswordConfirm').value;
+
+            if (!newPassword || !newPasswordConfirm) {
+                showAlert('dashboardView', '새 비밀번호를 입력해주세요.', 'error');
+                return;
+            }
+
+            if (newPassword.length < 6) {
+                showAlert('dashboardView', '비밀번호는 최소 6자 이상이어야 합니다.', 'error');
+                return;
+            }
+
+            if (newPassword !== newPasswordConfirm) {
+                showAlert('dashboardView', '비밀번호가 일치하지 않습니다.', 'error');
+                return;
+            }
+
+            try {
+                const { data, error } = await supabaseClient.auth.updateUser({
+                    password: newPassword
+                });
+
+                if (error) throw error;
+
+                // 비밀번호 필드 초기화
+                document.getElementById('newPassword').value = '';
+                document.getElementById('newPasswordConfirm').value = '';
+
+                showAlert('dashboardView', '비밀번호가 성공적으로 변경되었습니다!', 'success');
+            } catch (error) {
+                showAlert('dashboardView', '비밀번호 변경 실패: ' + error.message, 'error');
             }
         }
 
