@@ -20,17 +20,25 @@
 </head>
 <body>
     <div class="topnav">
+        <div class="logo-container">
+            <img src="logo.png" alt="두쫀쿠" class="logo">
+        </div>
         <div class="search-container">
             <input type="text" id="searchInput" placeholder="두바이쫀득쿠키 파는곳 검색...">
             <div id="searchResults" class="search-results hidden"></div>
         </div>
         <button class="register-btn" onclick="goToLogin()">
             <span class="register-btn-icon">🧑‍🍳</span>
-            <span>사장님 로그인</span>
+            <span>사장님</span>
         </button>
     </div>
     
     <div id="map"></div>
+    
+    <button id="myLocationBtn" class="floating-btn" onclick="moveToMyLocation()" title="내 주변">
+        <span class="floating-btn-icon">📍</span>
+        <span class="floating-btn-text">주변</span>
+    </button>
 
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
     <script>
@@ -72,10 +80,7 @@
                 zoom: 12,
                 minZoom: 8,
                 maxZoom: 18,
-                zoomControl: true,
-                zoomControlOptions: {
-                    position: naver.maps.Position.TOP_RIGHT
-                }
+                zoomControl: false
             });
 
             setupClusterZoomToggle();
@@ -447,6 +452,72 @@
         function setupSearch() {
             const searchInput = document.getElementById('searchInput');
             const resultsContainer = document.getElementById('searchResults');
+            const registerBtn = document.querySelector('.register-btn');
+            
+            // 모바일 체크 함수
+            function isMobile() {
+                return window.innerWidth <= 768;
+            }
+            
+            // 사장님 버튼을 다시 보이게 하는 함수
+            function showRegisterBtn() {
+                if (isMobile() && registerBtn) {
+                    registerBtn.style.display = 'flex';
+                }
+            }
+            
+            // 사장님 버튼을 숨기는 함수
+            function hideRegisterBtn() {
+                if (isMobile() && registerBtn) {
+                    registerBtn.style.display = 'none';
+                }
+            }
+            
+            // 검색 취소 함수
+            function cancelSearch() {
+                searchInput.value = '';
+                clearSearchResults();
+                displayMarkers(stores);
+            }
+            
+            // 모바일에서 검색 영역 포커스 시 사장님 버튼 숨기기
+            searchInput.addEventListener('focus', () => {
+                if (isMobile()) {
+                    hideRegisterBtn();
+                }
+            });
+            
+            // 검색 영역 포커스 아웃 시 사장님 버튼 다시 보이기
+            searchInput.addEventListener('blur', () => {
+                // 약간의 지연을 두어 검색 결과 클릭이 가능하도록
+                setTimeout(() => {
+                    showRegisterBtn();
+                }, 200);
+            });
+            
+            // 검색 영역이 아닌 곳을 클릭하면 검색 취소 및 사장님 버튼 다시 보이기 (모바일만)
+            document.addEventListener('click', (e) => {
+                if (!isMobile() || !registerBtn) return;
+                
+                // 검색 영역이나 검색 결과 영역을 클릭한 경우는 제외
+                const searchContainer = document.querySelector('.search-container');
+                const isClickInsideSearch = searchContainer && searchContainer.contains(e.target);
+                
+                if (!isClickInsideSearch) {
+                    // 검색 영역 밖을 클릭하면 검색 취소
+                    if (searchInput.value.trim() !== '') {
+                        cancelSearch();
+                    }
+                    // 사장님 버튼이 숨겨져 있으면 다시 보이기
+                    if (registerBtn.style.display === 'none') {
+                        showRegisterBtn();
+                    }
+                    // 포커스 해제
+                    if (document.activeElement === searchInput) {
+                        searchInput.blur();
+                    }
+                }
+            });
             
             searchInput.addEventListener('input', (e) => {
                 const searchTerm = e.target.value.toLowerCase().trim();
@@ -568,6 +639,43 @@
         // 로그인 페이지로 이동
         function goToLogin() {
             window.location.href = 'login.html';
+        }
+
+        // 내 현재 위치로 지도 이동
+        function moveToMyLocation() {
+            if (!navigator.geolocation) {
+                alert('이 브라우저는 위치 서비스를 지원하지 않습니다.');
+                return;
+            }
+
+            const btn = document.getElementById('myLocationBtn');
+            btn.style.opacity = '0.6';
+            btn.style.cursor = 'wait';
+
+            navigator.geolocation.getCurrentPosition(
+                function(position) {
+                    const lat = position.coords.latitude;
+                    const lng = position.coords.longitude;
+                    
+                    const currentLocation = new naver.maps.LatLng(lat, lng);
+                    map.setCenter(currentLocation);
+                    map.setZoom(15);
+                    
+                    btn.style.opacity = '1';
+                    btn.style.cursor = 'pointer';
+                },
+                function(error) {
+                    console.error('위치 정보를 가져올 수 없습니다:', error);
+                    alert('위치 정보를 가져올 수 없습니다. 위치 권한을 확인해주세요.');
+                    btn.style.opacity = '1';
+                    btn.style.cursor = 'pointer';
+                },
+                {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 0
+                }
+            );
         }
     </script>
 </body>
