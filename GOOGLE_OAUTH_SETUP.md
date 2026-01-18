@@ -5,7 +5,18 @@
 ## 1. Google Cloud Console 설정
 
 ### 1.1 프로젝트 생성 또는 선택
-1. [Google Cloud Console](https://console.cloud.google.com/) 접속
+1. [Google Cloud Console](https://console.cloud.
+
+
+
+
+
+
+
+
+
+
+google.com/) 접속
 2. 상단에서 프로젝트 선택 또는 새 프로젝트 생성
 
 ### 1.2 OAuth 동의 화면 설정
