@@ -98,12 +98,14 @@
 
         function setupClusterZoomToggle() {
             naver.maps.Event.addListener(map, 'zoom_changed', function() {
-                if (!markerCluster) return;
+                if (!markerCluster || !markers.length) return;
                 const z = map.getZoom();
                 if (z <= CLUSTER_MAX_ZOOM) {
+                    markers.forEach(function(m) { m.setMap(null); });
                     markerCluster.setMap(map);
                 } else {
                     markerCluster.setMap(null);
+                    markers.forEach(function(m) { m.setMap(map); });
                 }
             });
         }
@@ -158,14 +160,15 @@
                 const number = parseInt(store.number) || 0;
                 const position = new naver.maps.LatLng(lat, lng);
 
-                // 배경색 결정
+                // 여유(30+)=full, 중간(1~29)=midium, 적음(0)=less | 30개 이하면 품절 임박
+                let markerImg = number >= 30 ? 'full.png' : (number >= 1 ? 'midium.png' : 'less.png');
                 let bgColor, textColor;
                 if (number === 0) {
                     bgColor = '#000000';
                     textColor = '#ffffff';
                 } else if (number < 30) {
-                    bgColor = '#FFD700';
-                    textColor = '#000000';
+                    bgColor = '#f07e4d';
+                    textColor = '#ffffff';
                 } else {
                     bgColor = '#21b570';
                     textColor = '#ffffff';
@@ -174,7 +177,7 @@
                 // 커스텀 마커 HTML
                 const markerContent = `
                     <div style="position: relative; width: 56px; height: 66px; cursor: pointer;">
-                        <img src="duzonkus.png" style="width: 56px; height: 56px; display: block;" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2256%22 height=%2256%22><circle cx=%2228%22 cy=%2228%22 r=%2226%22 fill=%22%23FF6B6B%22/><text x=%2228%22 y=%2235%22 text-anchor=%22middle%22 fill=%22white%22 font-size=%2224%22>🍪</text></svg>'">
+                        <img src="${markerImg}" style="width: 56px; height: 56px; display: block;" onerror="this.src='duzonkus.png'">
                         <div style="
                             position: absolute;
                             top: 4px;
@@ -377,8 +380,10 @@
                 }
             });
 
-            // 초기 줌에 따른 표시 토글
-            if (map.getZoom() > CLUSTER_MAX_ZOOM) {
+            var z = map.getZoom();
+            if (z <= CLUSTER_MAX_ZOOM) {
+                markers.forEach(function(m) { m.setMap(null); });
+            } else {
                 markerCluster.setMap(null);
             }
         }

@@ -82,6 +82,15 @@
             <!-- 매장 정보 관리 -->
             <div class="card">
                 <h3>매장 정보</h3>
+
+                <div class="form-group" id="storeCodeDisplayGroup" style="display: none;">
+                    <label>매장 코드</label>
+                    <div style="display: flex; gap: 8px; align-items: stretch;">
+                        <input type="text" id="storeCodeDisplay" readonly style="flex: 1; background-color: #f5f5f5; cursor: not-allowed;">
+                        <button type="button" id="storeCodeCopyBtn" onclick="copyStoreCode()" style="flex: 1; padding: 12px 16px; border: 1px solid #ddd; border-radius: 8px; background: #fff; cursor: pointer; font-size: 14px; font-weight: 500;">📋 복사</button>
+                    </div>
+                    <small style="color: #666;">다른 사용자가 매장에 연결할 때 이 코드를 알려주세요.</small>
+                </div>
                 
                 <div class="form-group">
                     <label>대표 사진</label>
@@ -303,6 +312,15 @@
                     document.getElementById('plaintext').value = data.plaintext || '';
                     document.getElementById('plaintextInventory').value = data.plaintext || '';
                     document.getElementById('url').value = data.url || '';
+
+                    // 매장 코드 표시
+                    if (data.store_code) {
+                        document.getElementById('storeCodeDisplayGroup').style.display = 'block';
+                        document.getElementById('storeCodeDisplay').value = data.store_code;
+                    } else {
+                        document.getElementById('storeCodeDisplayGroup').style.display = 'none';
+                        document.getElementById('storeCodeDisplay').value = '';
+                    }
                     
                     // 업데이트 시간 표시
                     if (data.updated_at) {
@@ -321,9 +339,11 @@
                         document.getElementById('govImagePreview').innerHTML = `<img src="${data.gov}">`;
                     }
                 } else {
-                    // 매장이 없으면 상단 매장 연결 카드 표시
+                    // 매장이 없으면 상단 매장 연결 카드 표시, 매장 코드 영역 숨김
                     document.getElementById('storeConnectCard').style.display = 'block';
                     document.getElementById('connectedStoreInfo').style.display = 'none';
+                    document.getElementById('storeCodeDisplayGroup').style.display = 'none';
+                    document.getElementById('storeCodeDisplay').value = '';
                 }
             } catch (error) {
                 console.error('예상치 못한 오류:', error);
@@ -469,6 +489,32 @@
             return publicUrl;
         }
 
+        // 매장 코드 클립보드 복사
+        function copyStoreCode() {
+            const input = document.getElementById('storeCodeDisplay');
+            const btn = document.getElementById('storeCodeCopyBtn');
+            const code = input && input.value ? input.value.trim() : '';
+            if (!code) return;
+            navigator.clipboard.writeText(code).then(() => {
+                if (btn) {
+                    btn.textContent = '✓ 복사됨';
+                    setTimeout(() => { btn.textContent = '📋 복사'; }, 1500);
+                }
+            }).catch(() => {
+                showAlert('dashboardView', '복사에 실패했습니다.', 'error');
+            });
+        }
+
+        // 매장 코드 자동 생성 (영문+숫자 6자 이내)
+        function generateStoreCode() {
+            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+            let code = '';
+            for (let i = 0; i < 6; i++) {
+                code += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            return code;
+        }
+
         // 매장 정보 저장
         async function saveStoreInfo() {
             const location = document.getElementById('location').value.trim();
@@ -514,6 +560,11 @@
                 if (imgUrl) storeData.img = imgUrl;
                 if (govUrl) storeData.gov = govUrl;
 
+                // 신규 매장 등록 시 매장 코드 자동 생성 (영문+숫자 6자)
+                if (!currentStoreId) {
+                    storeData.store_code = generateStoreCode();
+                }
+
                 let result;
                 if (currentStoreId) {
                     // 업데이트
@@ -534,6 +585,12 @@
                 }
 
                 if (result.error) throw result.error;
+
+                // 신규 등록 시 매장 코드 영역 표시 (저장 직후 바로 노출)
+                if (result.data && result.data[0] && result.data[0].store_code) {
+                    document.getElementById('storeCodeDisplayGroup').style.display = 'block';
+                    document.getElementById('storeCodeDisplay').value = result.data[0].store_code;
+                }
 
                 showAlert('dashboardView', '매장 정보가 저장되었습니다! 관리자 승인 후 지도에 표시됩니다.', 'success');
             } catch (error) {

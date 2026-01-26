@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>관리자 지도 - 두바이쫀득쿠키</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="config.js"></script>
+    <script>
+        (function() {
+            const script = document.createElement('script');
+            script.type = 'text/javascript';
+            script.src = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${NAVER_MAP_CLIENT_ID}&submodules=clustering`;
+            document.head.appendChild(script);
+        })();
+    </script>
+    <style>
+        #adminmapWrap { position: fixed; inset: 0; display: flex; flex-direction: column; }
+        #adminmapWrap .adminmap-topnav-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; margin-left: 20px; }
+        #adminmapWrap .adminmap-topnav-right a { color: #333; text-decoration: none; font-size: 14px; padding: 8px 14px; background: #f0f0f0; border-radius: 8px; }
+        #adminmapWrap .adminmap-topnav-right a:hover { background: #e5e5e5; }
+        #adminmapWrap #map { flex: 1; width: 100%; min-height: 0; }
+        .adminmap-modal-overlay {
+            display: none;
+            position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1000;
+            align-items: center; justify-content: center; padding: 20px;
+        }
+        .adminmap-modal-overlay.show { display: flex; }
+        .adminmap-modal {
+            background: #fff; border-radius: 12px; padding: 24px; max-width: 420px; width: 100%;
+            box-shadow: 0 12px 40px rgba(0,0,0,0.2);
+        }
+        .adminmap-modal h3 { margin: 0 0 16px 0; font-size: 18px; color: #333; }
+        .adminmap-modal .form-group { margin-bottom: 14px; }
+        .adminmap-modal .form-group label { display: block; margin-bottom: 4px; font-size: 13px; color: #555; }
+        .adminmap-modal .form-group input,
+        .adminmap-modal .form-group textarea {
+            width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; box-sizing: border-box;
+        }
+        .adminmap-modal .form-group textarea { min-height: 70px; resize: vertical; }
+        .adminmap-modal .form-group small { display: block; margin-top: 4px; font-size: 12px; color: #888; }
+        .adminmap-modal-actions { display: flex; gap: 10px; margin-top: 20px; }
+        .adminmap-modal-actions button { flex: 1; padding: 12px; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; border: none; }
+        .adminmap-btn-cancel { background: #f0f0f0; color: #333; }
+        .adminmap-btn-submit { background: #28a745; color: #fff; }
+        .adminmap-btn-submit:disabled { opacity: 0.6; cursor: not-allowed; }
+    </style>
+</head>
+<body>
+    <div id="adminmapWrap">
+        <div class="topnav">
+            <div class="logo-container">
+                <a href="index.html"><img src="logo.png" alt="두쫀쿠" class="logo"></a>
+            </div>
+            <div class="search-container">
+                <input type="text" id="searchInput" placeholder="두바이쫀득쿠키 파는곳 검색...">
+                <div id="searchResults" class="search-results hidden"></div>
+            </div>
+            <div class="adminmap-topnav-right">
+                <a href="admin.html">승인 관리</a>
+                <button class="logout-btn" onclick="logout()">로그아웃</button>
+            </div>
+        </div>
+        <div id="map"></div>
+    </div>
+
+    <div id="addStoreModal" class="adminmap-modal-overlay">
+        <div class="adminmap-modal">
+            <h3>이 좌표에 매장 추가</h3>
+            <p id="addStoreCoords" style="font-size: 12px; color: #888; margin-bottom: 12px;"></p>
+            <div class="form-group">
+                <label>매장 이름 *</label>
+                <input type="text" id="addSubject" placeholder="매장 이름">
+            </div>
+            <div class="form-group">
+                <label>주소 *</label>
+                <input type="text" id="addAddress" placeholder="서울시 강남구 ...">
+            </div>
+            <div class="form-group">
+                <label>홍보 문구</label>
+                <textarea id="addPlaintext" placeholder="매장 소개 (선택)"></textarea>
+            </div>
+            <div class="form-group">
+                <label>연결 URL</label>
+                <input type="url" id="addUrl" placeholder="https://...">
+            </div>
+            <div class="form-group">
+                <label>재고 수</label>
+                <input type="number" id="addNumber" value="0" min="0" placeholder="0">
+            </div>
+            <div class="adminmap-modal-actions">
+                <button type="button" class="adminmap-btn-cancel" onclick="closeAddStoreModal()">취소</button>
+                <button type="button" class="adminmap-btn-submit" id="addStoreSubmitBtn" onclick="submitAddStore()">추가</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="alertBox" style="position:fixed;top:60px;left:50%;transform:translateX(-50%);z-index:1100;max-width:90%;"></div>
+
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <script>
+        const { createClient } = supabase;
+        const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        let map;
+        let markers = [];
+        let infoWindows = [];
+        let stores = [];
+        let markerCluster = null;
+        let currentUser = null;
+        let storeMarkerMap = {};
+        let storeInfoWindowMap = {};
+        let pendingCoord = null;
+        let currentInfoWindow = null;
+        const CLUSTER_MAX_ZOOM = 13;
+
+        function getTimeAgo(dateString) {
+            if (!dateString) return '';
+            const now = new Date();
+            const updated = new Date(dateString);
+            const diffMs = now - updated;
+            const diffMins = Math.floor(diffMs / 60000);
+            const diffHours = Math.floor(diffMs / 3600000);
+            const diffDays = Math.floor(diffMs / 86400000);
+            if (diffMins < 1) return '방금 전';
+            if (diffMins < 60) return diffMins + '분 전';
+            if (diffHours < 24) return diffHours + '시간 전';
+            if (diffDays < 7) return diffDays + '일 전';
+            return updated.toLocaleDateString('ko-KR');
+        }
+
+        function moveCenterForInfoWindow(latlng) {
+            const bounds = map.getBounds();
+            const sw = bounds.getSW();
+            const ne = bounds.getNE();
+            const latRange = ne.lat() - sw.lat();
+            const bottomRatio = 0.75;
+            const deltaLat = latRange * (bottomRatio - 0.5);
+            const newCenter = new naver.maps.LatLng(latlng.lat() + deltaLat, latlng.lng());
+            map.panTo(newCenter);
+        }
+
+        window.adminmapCopyStoreCode = function(code, btnId) {
+            if (!code) return;
+            navigator.clipboard.writeText(code).then(function() {
+                var btn = document.getElementById(btnId);
+                if (btn) {
+                    btn.textContent = '\u2713 \ubcf5\uc0ac\ub41c';
+                    setTimeout(function() { btn.textContent = '\uD83D\uDCCB \ubcf5\uc0ac'; }, 1500);
+                }
+                showAlert('매장 코드가 복사되었습니다.', 'success');
+            }).catch(function() {
+                showAlert('복사에 실패했습니다.', 'error');
+            });
+        };
+
+        window.doozonkuCloseInfoWindow = function(e) {
+            if (e) { e.stopPropagation(); e.preventDefault(); }
+            if (currentInfoWindow) {
+                currentInfoWindow.close();
+                currentInfoWindow = null;
+            }
+        };
+
+        window.addEventListener('load', async () => {
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            if (!session) {
+                alert('로그인이 필요합니다.');
+                window.location.href = 'login.html';
+                return;
+            }
+            currentUser = session.user;
+            if (currentUser.email !== ADMIN_EMAIL) {
+                alert('관리자 권한이 없습니다.');
+                window.location.href = 'index.html';
+                return;
+            }
+            if (typeof naver === 'undefined' || typeof naver.maps === 'undefined') {
+                setTimeout(() => initMapIfReady(), 300);
+            } else {
+                initMapIfReady();
+            }
+        });
+
+        function initMapIfReady() {
+            if (typeof naver === 'undefined' || typeof naver.maps === 'undefined') {
+                setTimeout(initMapIfReady, 300);
+                return;
+            }
+            initMap();
+        }
+
+        function initMap() {
+            map = new naver.maps.Map('map', {
+                center: new naver.maps.LatLng(37.5665, 126.9780),
+                zoom: 12,
+                minZoom: 8,
+                maxZoom: 18,
+                zoomControl: false
+            });
+            if (typeof naver.maps.Event !== 'undefined') {
+                naver.maps.Event.addListener(map, 'click', function() {
+                    infoWindows.forEach(function(iw) { iw.close(); });
+                    currentInfoWindow = null;
+                });
+                naver.maps.Event.addListener(map, 'rightclick', function(e) {
+                    e.domEvent.preventDefault();
+                    const lat = e.coord.lat();
+                    const lng = e.coord.lng();
+                    pendingCoord = { lat, lng };
+                    document.getElementById('addStoreCoords').textContent = `위도 ${lat.toFixed(5)}, 경도 ${lng.toFixed(5)}`;
+                    document.getElementById('addSubject').value = '';
+                    document.getElementById('addAddress').value = '';
+                    document.getElementById('addPlaintext').value = '';
+                    document.getElementById('addUrl').value = '';
+                    document.getElementById('addNumber').value = '0';
+                    document.getElementById('addStoreModal').classList.add('show');
+                });
+            }
+            naver.maps.Event.addListener(map, 'zoom_changed', function() {
+                if (!markerCluster || !markers.length) return;
+                var z = map.getZoom();
+                if (z <= CLUSTER_MAX_ZOOM) {
+                    markers.forEach(function(m) { m.setMap(null); });
+                    markerCluster.setMap(map);
+                } else {
+                    markerCluster.setMap(null);
+                    markers.forEach(function(m) { m.setMap(map); });
+                }
+            });
+            loadStores();
+            setupSearch();
+        }
+
+        function closeAddStoreModal() {
+            document.getElementById('addStoreModal').classList.remove('show');
+            pendingCoord = null;
+        }
+
+        function generateStoreCode() {
+            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+            let code = '';
+            for (let i = 0; i < 6; i++) {
+                code += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            return code;
+        }
+
+        async function submitAddStore() {
+            if (!pendingCoord) return;
+            const subject = document.getElementById('addSubject').value.trim();
+            const address = document.getElementById('addAddress').value.trim();
+            if (!subject || !address) {
+                showAlert('매장 이름과 주소를 입력해주세요.', 'error');
+                return;
+            }
+            const plaintext = document.getElementById('addPlaintext').value.trim();
+            const url = document.getElementById('addUrl').value.trim();
+            const number = parseInt(document.getElementById('addNumber').value, 10) || 0;
+            const locationStr = `${pendingCoord.lat},${pendingCoord.lng}`;
+
+            const btn = document.getElementById('addStoreSubmitBtn');
+            btn.disabled = true;
+            try {
+                const storeData = {
+                    user_id: currentUser.id,
+                    location: locationStr,
+                    address: address,
+                    subject: subject,
+                    plaintext: plaintext || null,
+                    url: url || null,
+                    number: number,
+                    checked: 'true',
+                    store_code: generateStoreCode()
+                };
+                const { data, error } = await supabaseClient
+                    .from('doozonku')
+                    .insert([storeData])
+                    .select()
+                    .single();
+                if (error) throw error;
+                showAlert('매장이 추가되었습니다.', 'success');
+                closeAddStoreModal();
+                if (data) {
+                    stores.push(data);
+                    displayMarkers(stores);
+                }
+            } catch (err) {
+                showAlert('추가 실패: ' + err.message, 'error');
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        async function loadStores() {
+            try {
+                const { data, error } = await supabaseClient
+                    .from('doozonku')
+                    .select('*');
+                if (error) throw error;
+                stores = data || [];
+                displayMarkers(stores);
+            } catch (err) {
+                console.error('매장 로드 오류:', err);
+            }
+        }
+
+        window.adminmapSetChecked = function(storeId, checkedValue) {
+            supabaseClient.from('doozonku').update({ checked: checkedValue }).eq('id', storeId).then(function(res) {
+                if (res.error) {
+                    showAlert('변경 실패: ' + res.error.message, 'error');
+                    return;
+                }
+                showAlert(checkedValue === 'true' ? '승인으로 설정했습니다.' : '비공개로 설정했습니다.', 'success');
+                loadStores();
+            });
+        };
+
+        function displayMarkers(storeList) {
+            markers.forEach(function(m) { m.setMap(null); });
+            markers = [];
+            infoWindows.forEach(function(iw) { iw.close(); });
+            infoWindows = [];
+            storeMarkerMap = {};
+            storeInfoWindowMap = {};
+
+            storeList.forEach(function(store) {
+                if (!store.location) return;
+                let lat, lng;
+                if (typeof store.location === 'string') {
+                    const coords = store.location.split(',').map(c => c.trim());
+                    lat = parseFloat(coords[0]);
+                    lng = parseFloat(coords[1]);
+                } else {
+                    return;
+                }
+                if (isNaN(lat) || isNaN(lng)) return;
+                const number = parseInt(store.number) || 0;
+                const isApproved = (store.checked === 'true' || store.checked === true);
+                const position = new naver.maps.LatLng(lat, lng);
+                var badgeText = isApproved ? String(number) : '미승인';
+                var markerImg = isApproved
+                    ? (number >= 30 ? 'full.png' : (number >= 1 ? 'midium.png' : 'less.png'))
+                    : 'duzonkus.png';
+                var badgeBg = isApproved ? (number === 0 ? '#000000' : (number < 30 ? '#f07e4d' : '#21b570')) : '#6c757d';
+                var badgeFg = isApproved ? '#ffffff' : '#ffffff';
+                const markerContent = '<div style="position:relative;width:56px;height:66px;cursor:pointer;">' +
+                    '<img src="' + markerImg + '" style="width:56px;height:56px;display:block;" onerror="this.src=\'duzonkus.png\'">' +
+                    '<div style="position:absolute;top:4px;right:0;transform:translateX(48%);background:' + badgeBg + ';color:' + badgeFg + ';border-radius:9px;min-width:28px;height:24px;padding:0 11px;display:inline-flex;align-items:center;justify-content:center;font-size:13px;font-weight:bold;border:1px solid white;">' + badgeText + '</div></div>';
+                const marker = new naver.maps.Marker({
+                    position: position,
+                    map: map,
+                    icon: {
+                        content: markerContent,
+                        size: new naver.maps.Size(56, 66),
+                        anchor: new naver.maps.Point(28, 66)
+                    }
+                });
+                marker.set('inventory', isApproved ? number : 0);
+                var statusText = isApproved ? (number === 0 ? '품절' : (number < 30 ? '품절 임박' : '여유')) : '미승인';
+                var statusColor = isApproved ? (number === 0 ? '#e74c3c' : (number < 30 ? '#f39c12' : '#27ae60')) : '#6c757d';
+                var statusBgColor = isApproved ? (number === 0 ? '#fee' : (number < 30 ? '#fff4e6' : '#e8f5e9')) : '#f0f0f0';
+                const timeAgo = getTimeAgo(store.updated_at || store.created_at);
+                let plaintext = store.plaintext || '';
+                if (plaintext) {
+                    if (!plaintext.startsWith('"')) plaintext = '"' + plaintext;
+                    if (!plaintext.endsWith('"') && !plaintext.match(/[과로]$/)) {
+                        var lastCh = plaintext.charAt(plaintext.length - 1);
+                        if (lastCh !== '과' && lastCh !== '로') plaintext += '과 ';
+                        plaintext += '"';
+                    } else if (!plaintext.endsWith('"')) plaintext += '"';
+                }
+                plaintext = plaintext.replace(/</g, '&lt;');
+                var naverMapUrl = '';
+                if (lat && lng) {
+                    naverMapUrl = 'https://map.naver.com/v5/search/' + encodeURIComponent(store.address || store.subject || '') + '/place/' + lng + ',' + lat;
+                }
+                var storeCode = store.store_code || '';
+                var storeCodeEscaped = storeCode.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                var copyBtnId = 'storeCodeCopyBtn-' + (store.id || Math.random());
+                var storeCodeRow = storeCode
+                    ? '<div style="margin-bottom:10px;"><p style="margin:0 0 6px 0;font-size:12px;color:#666;">매장 코드</p><div style="display:flex;gap:8px;align-items:stretch;"><input type="text" value="' + storeCode.replace(/"/g, '&quot;').replace(/</g, '&lt;') + '" readonly style="flex:1;padding:8px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px;background:#f5f5f5;"><button type="button" id="' + copyBtnId + '" onclick="window.adminmapCopyStoreCode(\'' + storeCodeEscaped + '\', \'' + copyBtnId + '\')" style="flex:1;padding:8px 12px;border:1px solid #ddd;border-radius:8px;background:#fff;cursor:pointer;font-size:13px;">📋 복사</button></div></div>'
+                    : '';
+                var statusLineText = isApproved ? ('재고: ' + number + '개') : '미승인';
+                var approveBtnStyle = isApproved ? 'padding:8px 14px;background:#28a745;color:#fff;border:none;border-radius:8px;font-size:13px;cursor:pointer;font-weight:500;' : 'padding:8px 14px;background:#e9ecef;color:#666;border:1px solid #dee2e6;border-radius:8px;font-size:13px;cursor:pointer;';
+                var privateBtnStyle = !isApproved ? 'padding:8px 14px;background:#6c757d;color:#fff;border:none;border-radius:8px;font-size:13px;cursor:pointer;font-weight:500;' : 'padding:8px 14px;background:#e9ecef;color:#666;border:1px solid #dee2e6;border-radius:8px;font-size:13px;cursor:pointer;';
+                var storeIdEscaped = String(store.id).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                const infoContent = '<div style="padding:0;min-width:250px;max-width:300px;border-radius:12px;overflow:hidden;background:white;box-shadow:0 8px 20px rgba(0,0,0,0.12);">' +
+                    '<div style="padding:20px;">' +
+                    '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;">' +
+                    '<h3 style="margin:0;font-size:18px;color:#3b2d23;font-weight:600;">' + (store.subject || '매장명 없음').replace(/</g, '&lt;') + '</h3>' +
+                    '<button type="button" onclick="window.doozonkuCloseInfoWindow(event)" style="border:none;background:transparent;cursor:pointer;font-size:16px;color:#999;padding:4px;border-radius:999px;">✕</button>' +
+                    '</div>' +
+                    (store.img ? '<img src="' + store.img.replace(/"/g, '&quot;') + '" style="width:100%;max-height:150px;object-fit:cover;border-radius:8px;margin-bottom:12px;display:block;">' : '') +
+                    storeCodeRow +
+                    '<div style="background:' + statusBgColor + ';padding:10px 12px;border-radius:8px;margin-bottom:10px;">' +
+                    '<div style="display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;">' +
+                    '<span style="font-weight:bold;font-size:15px;color:' + statusColor + ';">' + statusLineText + '</span>' +
+                    '<span style="padding:4px 10px;background:' + statusColor + ';color:white;border-radius:12px;font-size:12px;font-weight:600;">' + statusText + '</span>' +
+                    '</div></div>' +
+                    '<div style="margin-bottom:10px;"><p style="margin:0 0 6px 0;font-size:12px;color:#666;">공개 설정</p><div style="display:flex;gap:8px;">' +
+                    '<button type="button" onclick="window.adminmapSetChecked(\'' + storeIdEscaped + '\', \'true\')" style="' + approveBtnStyle + '">승인</button>' +
+                    '<button type="button" onclick="window.adminmapSetChecked(\'' + storeIdEscaped + '\', \'false\')" style="' + privateBtnStyle + '">비공개</button>' +
+                    '</div></div>' +
+                    (timeAgo ? '<p style="margin:0 0 10px 0;font-size:12px;color:#999;">' + timeAgo + ' 업데이트</p>' : '') +
+                    '<p style="margin:0 0 10px 0;font-size:14px;color:#666;line-height:1.5;">' + (plaintext || '-') + '</p>' +
+                    '<p style="margin:0 0 12px 0;font-size:13px;color:#999;">' + (store.address || '').replace(/</g, '&lt;') + '</p>' +
+                    (naverMapUrl ? '<a href="' + naverMapUrl + '" target="_blank" rel="noopener" style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:12px 16px;background:#2ec95d;color:white;text-decoration:none;border-radius:8px;font-size:15px;font-weight:600;text-align:center;box-sizing:border-box;"><img src="https://i.namu.wiki/i/S7V8Htt8LRUHYE5barta7QNNYklp8ZHZcYlMG4er6vD0XV1QsxWpkgb__Z7AJ0_-BzZsTdp3jJIERn81ttc_UQ.webp" style="width:20px;height:20px;border-radius:4px;object-fit:contain;" alt="네이버 지도">네이버 지도에서 보기 →</a>' : '') +
+                    '</div></div>';
+                const infoWindow = new naver.maps.InfoWindow({
+                    content: infoContent,
+                    borderWidth: 0,
+                    backgroundColor: 'transparent',
+                    borderRadius: '12px',
+                    anchorSize: new naver.maps.Size(10, 10),
+                    anchorSkew: true,
+                    pixelOffset: new naver.maps.Point(0, -10)
+                });
+                naver.maps.Event.addListener(marker, 'click', function(e) {
+                    if (e.domEvent && e.domEvent.button === 2) return;
+                    infoWindows.forEach(function(iw) { iw.close(); });
+                    moveCenterForInfoWindow(marker.getPosition());
+                    currentInfoWindow = infoWindow;
+                    infoWindow.open(map, marker);
+                });
+                naver.maps.Event.addListener(marker, 'rightclick', function(e) {
+                    if (e.domEvent) e.domEvent.stopPropagation();
+                });
+                markers.push(marker);
+                infoWindows.push(infoWindow);
+                if (store.id) {
+                    storeMarkerMap[store.id] = marker;
+                    storeInfoWindowMap[store.id] = infoWindow;
+                }
+            });
+
+            if (naver.maps.MarkerClustering && markers.length > 0) {
+                if (markerCluster) {
+                    markerCluster.setMap(null);
+                    markerCluster = null;
+                }
+                markerCluster = new naver.maps.MarkerClustering({
+                    minClusterSize: 2,
+                    maxZoom: CLUSTER_MAX_ZOOM,
+                    map: map,
+                    markers: markers,
+                    disableClickZoom: false,
+                    gridSize: 120,
+                    icons: [createClusterIcon()],
+                    indexGenerator: [10, 100, 200, 500, 1000],
+                    calculator: function(markerArray) {
+                        const sum = markerArray.reduce((acc, m) => acc + (parseInt(m.get('inventory')) || 0), 0);
+                        return { text: String(sum), index: 0 };
+                    }
+                });
+                var z = map.getZoom();
+                if (z <= CLUSTER_MAX_ZOOM) {
+                    markers.forEach(function(m) { m.setMap(null); });
+                } else {
+                    markerCluster.setMap(null);
+                }
+            }
+        }
+
+        function createClusterIcon() {
+            return {
+                content: '<div style="width:64px;height:64px;border-radius:50%;background:#fff;border:4px solid rgba(0,0,0,0.15);box-shadow:0 6px 16px rgba(0,0,0,0.25);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:18px;color:#111;"><span class="cluster-text">0</span></div>',
+                size: new naver.maps.Size(64, 64),
+                anchor: new naver.maps.Point(32, 32)
+            };
+        }
+
+        function setupSearch() {
+            var searchInput = document.getElementById('searchInput');
+            var resultsContainer = document.getElementById('searchResults');
+            if (!searchInput || !resultsContainer) return;
+
+            function clearSearchResults() {
+                resultsContainer.innerHTML = '';
+                resultsContainer.classList.add('hidden');
+            }
+
+            function highlightMatch(text, term) {
+                if (!term) return text;
+                var escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                var regex = new RegExp(escaped, 'gi');
+                return text.replace(regex, function(match) { return '<strong>' + match + '</strong>'; });
+            }
+
+            function focusStoreOnMap(store) {
+                if (!store || !store.location) return;
+                var lat, lng;
+                if (typeof store.location === 'string') {
+                    var coords = store.location.split(',').map(function(c) { return c.trim(); });
+                    lat = parseFloat(coords[0]);
+                    lng = parseFloat(coords[1]);
+                } else {
+                    return;
+                }
+                if (isNaN(lat) || isNaN(lng)) return;
+                var position = new naver.maps.LatLng(lat, lng);
+                map.setCenter(position);
+                map.setZoom(15);
+                if (store.id && storeMarkerMap[store.id] && storeInfoWindowMap[store.id]) {
+                    infoWindows.forEach(function(iw) { iw.close(); });
+                    moveCenterForInfoWindow(position);
+                    currentInfoWindow = storeInfoWindowMap[store.id];
+                    currentInfoWindow.open(map, storeMarkerMap[store.id]);
+                }
+            }
+
+            searchInput.addEventListener('input', function() {
+                var searchTerm = searchInput.value.toLowerCase().trim();
+                if (searchTerm === '') {
+                    displayMarkers(stores);
+                    clearSearchResults();
+                } else {
+                    var filtered = stores.filter(function(store) {
+                        return (store.subject && store.subject.toLowerCase().indexOf(searchTerm) !== -1) ||
+                            (store.address && store.address.toLowerCase().indexOf(searchTerm) !== -1) ||
+                            (store.plaintext && store.plaintext.toLowerCase().indexOf(searchTerm) !== -1);
+                    });
+                    displayMarkers(filtered);
+                    if (filtered.length === 0) {
+                        clearSearchResults();
+                        return;
+                    }
+                    var maxItems = 8;
+                    resultsContainer.innerHTML = '';
+                    filtered.slice(0, maxItems).forEach(function(store) {
+                        var number = parseInt(store.number, 10) || 0;
+                        var statusText = number === 0 ? '품절' : (number < 30 ? '품절 임박' : '여유');
+                        var statusColor = number === 0 ? '#e74c3c' : (number < 30 ? '#f39c12' : '#27ae60');
+                        var item = document.createElement('div');
+                        item.className = 'search-result-item';
+                        item.innerHTML = '<div class="search-result-image">' +
+                            (store.img ? '<img src="' + store.img.replace(/"/g, '&quot;') + '" alt="매장">' : '<div class="search-result-placeholder">🍪</div>') +
+                            '</div><div class="search-result-content">' +
+                            '<span class="search-result-title">' + highlightMatch(store.subject || '매장명 없음', searchTerm) + '</span>' +
+                            '<span class="search-result-address">' + highlightMatch(store.address || '', searchTerm) + '</span>' +
+                            '</div><div class="search-result-status" style="color:' + statusColor + '">' + statusText + '</div>';
+                        item.onclick = function() {
+                            focusStoreOnMap(store);
+                            clearSearchResults();
+                            searchInput.blur();
+                        };
+                        resultsContainer.appendChild(item);
+                    });
+                    resultsContainer.classList.remove('hidden');
+                }
+            });
+
+            document.addEventListener('click', function(e) {
+                if (!resultsContainer.contains(e.target) && e.target !== searchInput) {
+                    clearSearchResults();
+                }
+            });
+        }
+
+        function logout() {
+            supabaseClient.auth.signOut().then(() => {
+                window.location.href = 'index.html';
+            });
+        }
+
+        function showAlert(message, type) {
+            const box = document.getElementById('alertBox');
+            box.innerHTML = '<div class="alert alert-' + type + '">' + message + '</div>';
+            setTimeout(() => { box.innerHTML = ''; }, 4000);
+        }
+    </script>
+</body>
+</html>

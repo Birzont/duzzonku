@@ -20,7 +20,10 @@
             <p>데이터를 불러오는 중...</p>
         </div>
 
-        <div id="storeList" class="store-list" style="display: none;"></div>
+        <div id="storeListSection" style="display: none;">
+            <h2 class="pending-title">승인 대기 중인 매장 <span id="pendingCount" class="pending-count">0</span>건</h2>
+            <div id="storeList" class="store-list"></div>
+        </div>
         
         <div id="emptyState" style="display: none; text-align: center; padding: 60px 20px; color: #666;">
             <h2>승인 대기 중인 매장이 없습니다</h2>
@@ -59,17 +62,17 @@
             loadPendingStores();
         });
 
-        // 승인 대기 중인 매장 목록 로드
+        // 승인 대기 중인 매장 목록 로드 (checked가 'true'가 아닌 것 = 대기)
         async function loadPendingStores() {
             try {
                 document.getElementById('loading').style.display = 'block';
-                document.getElementById('storeList').style.display = 'none';
+                document.getElementById('storeListSection').style.display = 'none';
                 document.getElementById('emptyState').style.display = 'none';
 
                 const { data, error } = await supabaseClient
                     .from('doozonku')
                     .select('*')
-                    .or('checked.is.null,checked.eq.false,checked.eq.')
+                    .or('checked.is.null,checked.neq.true')
                     .order('created_at', { ascending: false });
 
                 document.getElementById('loading').style.display = 'none';
@@ -77,6 +80,8 @@
                 if (error) throw error;
 
                 if (data && data.length > 0) {
+                    document.getElementById('pendingCount').textContent = data.length;
+                    document.getElementById('storeListSection').style.display = 'block';
                     displayStores(data);
                 } else {
                     document.getElementById('emptyState').style.display = 'block';
@@ -90,27 +95,30 @@
         // 매장 목록 표시
         function displayStores(stores) {
             const storeList = document.getElementById('storeList');
-            storeList.style.display = 'grid';
             storeList.innerHTML = '';
 
             stores.forEach(store => {
+                const subject = (store.subject || '매장명 없음').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                const address = (store.address || '-').replace(/</g, '&lt;');
+                const plaintext = (store.plaintext || '-').replace(/</g, '&lt;');
                 const storeItem = document.createElement('div');
                 storeItem.className = 'store-item';
                 storeItem.innerHTML = `
                     <div class="store-item-header">
-                        ${store.img ? `<img src="${store.img}" class="store-item-image" alt="${store.subject}">` : ''}
+                        ${store.img ? `<img src="${store.img}" class="store-item-image" alt="${subject}">` : '<div class="store-item-image store-item-image-placeholder">사진 없음</div>'}
                         <div class="store-item-info">
-                            <h3>${store.subject || '매장명 없음'}</h3>
-                            <p><strong>주소:</strong> ${store.address || '-'}</p>
+                            <h3>${subject}</h3>
+                            ${store.store_code ? `<p><strong>매장 코드:</strong> <code>${String(store.store_code).replace(/</g, '&lt;')}</code></p>` : ''}
+                            <p><strong>주소:</strong> ${address}</p>
                             <p><strong>좌표:</strong> ${store.location || '-'}</p>
-                            <p><strong>재고:</strong> ${store.number || 0}개</p>
-                            <p><strong>홍보 문구:</strong> ${store.plaintext || '-'}</p>
-                            ${store.url ? `<p><strong>URL:</strong> <a href="${store.url}" target="_blank">${store.url}</a></p>` : ''}
+                            <p><strong>재고:</strong> ${store.number ?? 0}개</p>
+                            <p><strong>홍보 문구:</strong> ${plaintext}</p>
+                            ${store.url ? `<p><strong>URL:</strong> <a href="${store.url}" target="_blank" rel="noopener">${store.url}</a></p>` : ''}
                             <p><strong>등록일:</strong> ${store.created_at ? new Date(store.created_at).toLocaleString('ko-KR') : '-'}</p>
                         </div>
                     </div>
                     <div class="store-item-actions">
-                        ${store.gov ? `<button class="btn-view" onclick="viewDocument('${store.gov}')">사업자등록증 보기</button>` : '<span style="color: #999;">사업자등록증 없음</span>'}
+                        ${store.gov ? `<button class="btn-view" onclick="viewDocument('${store.gov.replace(/'/g, "\\'")}')">사업자등록증 보기</button>` : '<span style="color: #999;">사업자등록증 없음</span>'}
                         <button class="btn-approve" onclick="approveStore('${store.id}')">✓ 승인</button>
                         <button class="btn-reject" onclick="rejectStore('${store.id}')">✗ 거절</button>
                     </div>
@@ -119,9 +127,13 @@
             });
         }
 
-        // 사업자등록증 보기
+        // 사업자등록증 보기 (팝업)
         function viewDocument(url) {
-            window.open(url, '_blank');
+            const w = 800;
+            const h = 600;
+            const left = (screen.width - w) / 2;
+            const top = (screen.height - h) / 2;
+            window.open(url, 'govDoc', `width=${w},height=${h},left=${left},top=${top},scrollbars=yes,resizable=yes`);
         }
 
         // 매장 승인
