@@ -10,7 +10,7 @@
         (function() {
             const script = document.createElement('script');
             script.type = 'text/javascript';
-            script.src = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${NAVER_MAP_CLIENT_ID}&submodules=clustering`;
+            script.src = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${NAVER_MAP_CLIENT_ID}&submodules=clustering,geocoder`;
             document.head.appendChild(script);
         })();
     </script>
@@ -44,6 +44,13 @@
         .adminmap-btn-cancel { background: #f0f0f0; color: #333; }
         .adminmap-btn-submit { background: #28a745; color: #fff; }
         .adminmap-btn-submit:disabled { opacity: 0.6; cursor: not-allowed; }
+        .adminmap-add-btn {
+            position: fixed; right: 20px; bottom: 20px; z-index: 500;
+            width: 56px; height: 56px; border-radius: 50%;
+            background: #28a745; color: #fff; border: none; box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            font-size: 24px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+        }
+        .adminmap-add-btn:hover { background: #218838; }
     </style>
 </head>
 <body>
@@ -62,19 +69,21 @@
             </div>
         </div>
         <div id="map"></div>
+        <button type="button" class="adminmap-add-btn" onclick="openAddStoreModalFromButton()" title="매장 추가">+</button>
     </div>
 
     <div id="addStoreModal" class="adminmap-modal-overlay">
         <div class="adminmap-modal">
-            <h3>이 좌표에 매장 추가</h3>
+            <h3 id="addStoreModalTitle">매장 추가</h3>
             <p id="addStoreCoords" style="font-size: 12px; color: #888; margin-bottom: 12px;"></p>
             <div class="form-group">
                 <label>매장 이름 *</label>
                 <input type="text" id="addSubject" placeholder="매장 이름">
             </div>
             <div class="form-group">
-                <label>주소 *</label>
-                <input type="text" id="addAddress" placeholder="서울시 강남구 ...">
+                <label>도로명주소 *</label>
+                <input type="text" id="addAddress" placeholder="도로명주소 또는 지번 주소 입력">
+                <small id="addAddressHint" style="color: #888;">주소 입력 시 위치를 자동으로 찾습니다.</small>
             </div>
             <div class="form-group">
                 <label>홍보 문구</label>
@@ -208,7 +217,9 @@
                     const lat = e.coord.lat();
                     const lng = e.coord.lng();
                     pendingCoord = { lat, lng };
-                    document.getElementById('addStoreCoords').textContent = `위도 ${lat.toFixed(5)}, 경도 ${lng.toFixed(5)}`;
+                    document.getElementById('addStoreModalTitle').textContent = '이 좌표에 매장 추가';
+                    document.getElementById('addStoreCoords').textContent = '위도 ' + lat.toFixed(5) + ', 경도 ' + lng.toFixed(5);
+                    document.getElementById('addStoreCoords').style.display = '';
                     document.getElementById('addSubject').value = '';
                     document.getElementById('addAddress').value = '';
                     document.getElementById('addPlaintext').value = '';
@@ -232,6 +243,19 @@
             setupSearch();
         }
 
+        function openAddStoreModalFromButton() {
+            pendingCoord = null;
+            document.getElementById('addStoreModalTitle').textContent = '매장 추가';
+            document.getElementById('addStoreCoords').textContent = '도로명주소를 입력하면 위치를 자동으로 찾습니다.';
+            document.getElementById('addStoreCoords').style.display = '';
+            document.getElementById('addSubject').value = '';
+            document.getElementById('addAddress').value = '';
+            document.getElementById('addPlaintext').value = '';
+            document.getElementById('addUrl').value = '';
+            document.getElementById('addNumber').value = '0';
+            document.getElementById('addStoreModal').classList.add('show');
+        }
+
         function closeAddStoreModal() {
             document.getElementById('addStoreModal').classList.remove('show');
             pendingCoord = null;
@@ -246,50 +270,105 @@
             return code;
         }
 
+        function doInsertStore(locationStr, subject, address, plaintext, url, number, btn) {
+            var storeData = {
+                user_id: currentUser.id,
+                location: locationStr,
+                address: address,
+                subject: subject,
+                plaintext: plaintext || null,
+                url: url || null,
+                number: number,
+                checked: 'true',
+                store_code: generateStoreCode()
+            };
+            supabaseClient
+                .from('doozonku')
+                .insert([storeData])
+                .select()
+                .single()
+                .then(function(res) {
+                    if (res.error) throw res.error;
+                    showAlert('매장이 추가되었습니다.', 'success');
+                    closeAddStoreModal();
+                    if (res.data) {
+                        stores.push(res.data);
+                        displayMarkers(stores);
+                    }
+                })
+                .catch(function(err) {
+                    showAlert('추가 실패: ' + err.message, 'error');
+                })
+                .finally(function() {
+                    btn.disabled = false;
+                });
+        }
+
         async function submitAddStore() {
-            if (!pendingCoord) return;
             const subject = document.getElementById('addSubject').value.trim();
             const address = document.getElementById('addAddress').value.trim();
             if (!subject || !address) {
-                showAlert('매장 이름과 주소를 입력해주세요.', 'error');
+                showAlert('매장 이름과 도로명주소를 입력해주세요.', 'error');
                 return;
             }
             const plaintext = document.getElementById('addPlaintext').value.trim();
             const url = document.getElementById('addUrl').value.trim();
             const number = parseInt(document.getElementById('addNumber').value, 10) || 0;
-            const locationStr = `${pendingCoord.lat},${pendingCoord.lng}`;
-
             const btn = document.getElementById('addStoreSubmitBtn');
             btn.disabled = true;
-            try {
-                const storeData = {
-                    user_id: currentUser.id,
-                    location: locationStr,
-                    address: address,
-                    subject: subject,
-                    plaintext: plaintext || null,
-                    url: url || null,
-                    number: number,
-                    checked: 'true',
-                    store_code: generateStoreCode()
-                };
-                const { data, error } = await supabaseClient
-                    .from('doozonku')
-                    .insert([storeData])
-                    .select()
-                    .single();
-                if (error) throw error;
-                showAlert('매장이 추가되었습니다.', 'success');
-                closeAddStoreModal();
-                if (data) {
-                    stores.push(data);
-                    displayMarkers(stores);
-                }
-            } catch (err) {
-                showAlert('추가 실패: ' + err.message, 'error');
-            } finally {
-                btn.disabled = false;
+
+            if (pendingCoord) {
+                var locationStr = pendingCoord.lat + ',' + pendingCoord.lng;
+                doInsertStore(locationStr, subject, address, plaintext, url, number, btn);
+                return;
             }
+
+            function tryGeocode() {
+                if (typeof naver === 'undefined' || !naver.maps || !naver.maps.Service) {
+                    return false;
+                }
+                naver.maps.Service.geocode({ address: address }, function(status, response) {
+                    if (status !== naver.maps.Service.Status.OK) {
+                        console.warn('Geocode status:', status, response);
+                        showAlert('주소를 찾을 수 없습니다. 네이버콘솔에서 이 페이지 URL이 Web 서비스 URL에 등록되어 있는지 확인해주세요.', 'error');
+                        btn.disabled = false;
+                        return;
+                    }
+                    var items = response.result && response.result.items;
+                    if (!items || items.length === 0) {
+                        showAlert('해당 주소의 위치를 찾을 수 없습니다.', 'error');
+                        btn.disabled = false;
+                        return;
+                    }
+                    var first = items[0];
+                    var point = first.point || first;
+                    var lat = point.y != null ? point.y : point.lat;
+                    var lng = point.x != null ? point.x : point.lng;
+                    if (lat == null || lng == null) {
+                        showAlert('좌표를 가져올 수 없습니다.', 'error');
+                        btn.disabled = false;
+                        return;
+                    }
+                    var locationStr = lat + ',' + lng;
+                    doInsertStore(locationStr, subject, address, plaintext, url, number, btn);
+                });
+                return true;
+            }
+            if (tryGeocode()) return;
+            var attempts = 0;
+            var maxAttempts = 20;
+            var interval = 300;
+            var waitForService = function() {
+                attempts++;
+                if (tryGeocode()) return;
+                if (attempts >= maxAttempts) {
+                    showAlert('주소 검색 기능을 불러올 수 없습니다. 페이지를 새로고침한 뒤 다시 시도해주세요.', 'error');
+                    btn.disabled = false;
+                    return;
+                }
+                setTimeout(waitForService, interval);
+            };
+            setTimeout(waitForService, interval);
         }
 
         async function loadStores() {
