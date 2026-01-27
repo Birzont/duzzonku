@@ -24,6 +24,7 @@ jobs:
 
       - name: Create config.js from secrets
         run: |
+          echo "Creating config.js from secrets..."
           cat > config.js << EOF
           // Supabase 설정
           const SUPABASE_URL = '${{ secrets.SUPABASE_URL }}';
@@ -35,6 +36,18 @@ jobs:
           // 관리자 이메일
           const ADMIN_EMAIL = '${{ secrets.ADMIN_EMAIL }}';
           EOF
+          echo "config.js created successfully"
+          echo "Checking if config.js exists..."
+          ls -la config.js || echo "ERROR: config.js was not created!"
+          
+      - name: Verify config.js
+        run: |
+          if [ ! -f config.js ]; then
+            echo "ERROR: config.js file was not created!"
+            exit 1
+          fi
+          echo "config.js exists. First few lines:"
+          head -n 5 config.js
 
       - name: Setup Pages
         uses: actions/configure-pages@v4

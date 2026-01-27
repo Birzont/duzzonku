@@ -7,15 +7,28 @@
     <link rel="stylesheet" href="styles.css">
     <script src="config.js"></script>
     <script>
-        // config.js 로드 후 네이버 지도 스크립트 동적 추가
-        (function() {
+        // config.js 로드 확인 후 네이버 지도 스크립트 동적 추가
+        function loadNaverMapScript() {
+            if (typeof NAVER_MAP_CLIENT_ID === 'undefined') {
+                // config.js가 아직 로드되지 않았으면 재시도
+                setTimeout(loadNaverMapScript, 100);
+                return;
+            }
+            
             const script = document.createElement('script');
             script.type = 'text/javascript';
             // ncpClientId 대신 ncpKeyId 사용 (NAVER 문서 기준)
             // 클러스터링 사용을 위해 submodules=clustering 포함
             script.src = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${NAVER_MAP_CLIENT_ID}&submodules=clustering`;
             document.head.appendChild(script);
-        })();
+        }
+        
+        // 페이지 로드 시 네이버 지도 스크립트 로드 시작
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', loadNaverMapScript);
+        } else {
+            loadNaverMapScript();
+        }
     </script>
 </head>
 <body>
