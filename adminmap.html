@@ -97,6 +97,13 @@
                 <label>재고 수</label>
                 <input type="number" id="addNumber" value="0" min="0" placeholder="0">
             </div>
+            <div class="form-group">
+                <label>활발 여부</label>
+                <label style="font-size: 13px; color: #666;">
+                    <input type="checkbox" id="addOften"> 활발한 매장으로 표시
+                </label>
+                <small style="color: #888;">기본값은 일반 매장입니다.</small>
+            </div>
             <div class="adminmap-modal-actions">
                 <button type="button" class="adminmap-btn-cancel" onclick="closeAddStoreModal()">취소</button>
                 <button type="button" class="adminmap-btn-submit" id="addStoreSubmitBtn" onclick="submitAddStore()">추가</button>
@@ -253,6 +260,8 @@
             document.getElementById('addPlaintext').value = '';
             document.getElementById('addUrl').value = '';
             document.getElementById('addNumber').value = '0';
+            var oftenCheckbox = document.getElementById('addOften');
+            if (oftenCheckbox) oftenCheckbox.checked = false;
             document.getElementById('addStoreModal').classList.add('show');
         }
 
@@ -270,7 +279,7 @@
             return code;
         }
 
-        function doInsertStore(locationStr, subject, address, plaintext, url, number, btn) {
+        function doInsertStore(locationStr, subject, address, plaintext, url, number, often, btn) {
             var storeData = {
                 user_id: currentUser.id,
                 location: locationStr,
@@ -279,6 +288,7 @@
                 plaintext: plaintext || null,
                 url: url || null,
                 number: number,
+                often: !!often,
                 checked: 'true',
                 store_code: generateStoreCode()
             };
@@ -314,12 +324,13 @@
             const plaintext = document.getElementById('addPlaintext').value.trim();
             const url = document.getElementById('addUrl').value.trim();
             const number = parseInt(document.getElementById('addNumber').value, 10) || 0;
+            const often = !!(document.getElementById('addOften') && document.getElementById('addOften').checked);
             const btn = document.getElementById('addStoreSubmitBtn');
             btn.disabled = true;
 
             if (pendingCoord) {
                 var locationStr = pendingCoord.lat + ',' + pendingCoord.lng;
-                doInsertStore(locationStr, subject, address, plaintext, url, number, btn);
+                doInsertStore(locationStr, subject, address, plaintext, url, number, often, btn);
                 return;
             }
 
@@ -350,7 +361,7 @@
                         return;
                     }
                     var locationStr = lat + ',' + lng;
-                    doInsertStore(locationStr, subject, address, plaintext, url, number, btn);
+                    doInsertStore(locationStr, subject, address, plaintext, url, number, often, btn);
                 });
                 return true;
             }
@@ -395,6 +406,17 @@
             });
         };
 
+        window.adminmapSetOften = function(storeId, oftenValue) {
+            supabaseClient.from('doozonku').update({ often: oftenValue }).eq('id', storeId).then(function(res) {
+                if (res.error) {
+                    showAlert('변경 실패: ' + res.error.message, 'error');
+                    return;
+                }
+                showAlert(oftenValue ? '활발한 매장으로 설정했습니다.' : '일반 매장으로 설정했습니다.', 'success');
+                loadStores();
+            });
+        };
+
         function displayMarkers(storeList) {
             markers.forEach(function(m) { m.setMap(null); });
             markers = [];
@@ -417,15 +439,32 @@
                 const number = parseInt(store.number) || 0;
                 const isApproved = (store.checked === 'true' || store.checked === true);
                 const position = new naver.maps.LatLng(lat, lng);
+
+                // 없음(0)=none, 품절임박(1~9)=low, 보통(10~48)=normal, 여유(50+)=high
+                var category;
+                if (number === 0) {
+                    category = 'none';
+                } else if (number < 10) {
+                    category = 'low';
+                } else if (number < 49) {
+                    category = 'normal';
+                } else {
+                    category = 'high';
+                }
+
                 var badgeText = isApproved ? String(number) : '미승인';
+                var isOften = !!store.often;
                 var markerImg = isApproved
-                    ? (number >= 30 ? 'full.png' : (number >= 1 ? 'midium.png' : 'less.png'))
+                    ? (category === 'none' ? 'none.png' : (category === 'low' ? 'less.png' : (category === 'normal' ? 'midium.png' : 'full.png')))
                     : 'duzonkus.png';
-                var badgeBg = isApproved ? (number === 0 ? '#473b36' : (number < 30 ? '#f07e4d' : '#21b570')) : '#6c757d';
+                var badgeBg = isApproved
+                    ? (category === 'none' ? '#473b36' : (category === 'low' ? '#f07e4d' : '#21b570'))
+                    : '#6c757d';
                 var badgeFg = isApproved ? '#ffffff' : '#ffffff';
+                var badgeBorderColor = isOften ? '#ffffff' : '#3b3330';
                 const markerContent = '<div style="position:relative;width:56px;height:66px;cursor:pointer;">' +
                     '<img src="' + markerImg + '" style="width:56px;height:56px;display:block;" onerror="this.src=\'duzonkus.png\'">' +
-                    '<div style="position:absolute;top:4px;right:0;transform:translateX(48%);background:' + badgeBg + ';color:' + badgeFg + ';border-radius:9px;min-width:28px;height:24px;padding:0 11px;display:inline-flex;align-items:center;justify-content:center;font-size:13px;font-weight:bold;border:1px solid white;">' + badgeText + '</div></div>';
+                    '<div style="position:absolute;top:4px;right:0;transform:translateX(48%);background:' + badgeBg + ';color:' + badgeFg + ';border-radius:9px;min-width:24px;height:24px;padding:0 9px;display:inline-flex;align-items:center;justify-content:center;font-size:13px;font-weight:bold;border:1px solid ' + badgeBorderColor + ';">' + badgeText + '</div></div>';
                 const marker = new naver.maps.Marker({
                     position: position,
                     map: map,
@@ -436,9 +475,15 @@
                     }
                 });
                 marker.set('inventory', isApproved ? number : 0);
-                var statusText = isApproved ? (number === 0 ? '품절' : (number < 30 ? '품절 임박' : '여유')) : '미승인';
-                var statusColor = isApproved ? (number === 0 ? '#e74c3c' : (number < 30 ? '#f39c12' : '#27ae60')) : '#6c757d';
-                var statusBgColor = isApproved ? (number === 0 ? '#fee' : (number < 30 ? '#fff4e6' : '#e8f5e9')) : '#f0f0f0';
+                var statusText = isApproved
+                    ? (category === 'none' ? '없음' : (category === 'low' ? '임박' : (category === 'normal' ? '보통' : '여유')))
+                    : '미승인';
+                var statusColor = isApproved
+                    ? (category === 'none' ? '#e74c3c' : (category === 'low' ? '#f39c12' : '#27ae60'))
+                    : '#6c757d';
+                var statusBgColor = isApproved
+                    ? (category === 'none' ? '#fee' : (category === 'low' ? '#fff4e6' : '#e8f5e9'))
+                    : '#f0f0f0';
                 const timeAgo = getTimeAgo(store.updated_at || store.created_at);
                 let plaintext = store.plaintext || '';
                 if (plaintext) {
@@ -461,6 +506,9 @@
                     ? '<div style="margin-bottom:10px;"><p style="margin:0 0 6px 0;font-size:12px;color:#666;">매장 코드</p><div style="display:flex;gap:8px;align-items:stretch;"><input type="text" value="' + storeCode.replace(/"/g, '&quot;').replace(/</g, '&lt;') + '" readonly style="flex:1;padding:8px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px;background:#f5f5f5;"><button type="button" id="' + copyBtnId + '" onclick="window.adminmapCopyStoreCode(\'' + storeCodeEscaped + '\', \'' + copyBtnId + '\')" style="flex:1;padding:8px 12px;border:1px solid #ddd;border-radius:8px;background:#fff;cursor:pointer;font-size:13px;">📋 복사</button></div></div>'
                     : '';
                 var statusLineText = isApproved ? ('재고: ' + number + '개') : '미승인';
+                var priceVal = store.price;
+                var priceText = (priceVal || priceVal === 0) ? Number(priceVal).toLocaleString('ko-KR') + '원' : '정보 없음';
+                var oftenText = store.often ? '활발한 매장' : '일반';
                 var approveBtnStyle = isApproved ? 'padding:8px 14px;background:#28a745;color:#fff;border:none;border-radius:8px;font-size:13px;cursor:pointer;font-weight:500;' : 'padding:8px 14px;background:#e9ecef;color:#666;border:1px solid #dee2e6;border-radius:8px;font-size:13px;cursor:pointer;';
                 var privateBtnStyle = !isApproved ? 'padding:8px 14px;background:#6c757d;color:#fff;border:none;border-radius:8px;font-size:13px;cursor:pointer;font-weight:500;' : 'padding:8px 14px;background:#e9ecef;color:#666;border:1px solid #dee2e6;border-radius:8px;font-size:13px;cursor:pointer;';
                 var storeIdEscaped = String(store.id).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
@@ -477,6 +525,15 @@
                     '<span style="font-weight:bold;font-size:15px;color:' + statusColor + ';">' + statusLineText + '</span>' +
                     '<span style="padding:4px 10px;background:' + statusColor + ';color:white;border-radius:12px;font-size:12px;font-weight:600;">' + statusText + '</span>' +
                     '</div></div>' +
+                    '<p style="margin:0 0 6px 0;font-size:13px;color:#666;">가격: ' + priceText + '</p>' +
+                    '<p style="margin:0 0 6px 0;font-size:13px;color:#666;">활발 여부: ' + oftenText + '</p>' +
+                    '<div style="margin:0 0 10px 0;font-size:12px;color:#666;">' +
+                    '<p style="margin:0 0 4px 0;">활발 여부 설정</p>' +
+                    '<div style="display:flex;gap:8px;margin-bottom:6px;">' +
+                    '<button type="button" onclick="window.adminmapSetOften(\'' + storeIdEscaped + '\', true)" style="padding:6px 10px;border-radius:8px;font-size:12px;cursor:pointer;border:1px solid ' + (store.often ? '#28a745' : '#dee2e6') + ';background:' + (store.often ? '#28a745' : '#f8f9fa') + ';color:' + (store.often ? '#fff' : '#555') + ';">활발</button>' +
+                    '<button type="button" onclick="window.adminmapSetOften(\'' + storeIdEscaped + '\', false)" style="padding:6px 10px;border-radius:8px;font-size:12px;cursor:pointer;border:1px solid ' + (!store.often ? '#6c757d' : '#dee2e6') + ';background:' + (!store.often ? '#6c757d' : '#f8f9fa') + ';color:' + (!store.often ? '#fff' : '#555') + ';">일반</button>' +
+                    '</div>' +
+                    '</div>' +
                     '<div style="margin-bottom:10px;"><p style="margin:0 0 6px 0;font-size:12px;color:#666;">공개 설정</p><div style="display:flex;gap:8px;">' +
                     '<button type="button" onclick="window.adminmapSetChecked(\'' + storeIdEscaped + '\', \'true\')" style="' + approveBtnStyle + '">승인</button>' +
                     '<button type="button" onclick="window.adminmapSetChecked(\'' + storeIdEscaped + '\', \'false\')" style="' + privateBtnStyle + '">비공개</button>' +
@@ -608,7 +665,7 @@
                     resultsContainer.innerHTML = '';
                     filtered.slice(0, maxItems).forEach(function(store) {
                         var number = parseInt(store.number, 10) || 0;
-                        var statusText = number === 0 ? '품절' : (number < 30 ? '품절 임박' : '여유');
+                        var statusText = number === 0 ? '품절' : (number < 30 ? '임박' : '여유');
                         var statusColor = number === 0 ? '#e74c3c' : (number < 30 ? '#f39c12' : '#27ae60');
                         var item = document.createElement('div');
                         item.className = 'search-result-item';

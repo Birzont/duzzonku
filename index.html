@@ -27,10 +27,36 @@
             <input type="text" id="searchInput" placeholder="두바이쫀득쿠키 파는곳 검색...">
             <div id="searchResults" class="search-results hidden"></div>
         </div>
+        <button class="filter-btn" onclick="toggleFilterPanel()">
+            <span class="filter-btn-icon">🔍</span>
+            <span>필터</span>
+        </button>
         <button class="register-btn" onclick="goToLogin()">
             <span class="register-btn-icon">🧑‍🍳</span>
             <span>사장님</span>
         </button>
+    </div>
+    
+    <div id="filterPanel" class="filter-panel hidden">
+        <h3>필터</h3>
+        <div class="filter-section">
+            <div class="filter-section-title">가격</div>
+            <div class="filter-price-buttons">
+                <button type="button" class="filter-price-btn" data-price="5000" onclick="setPriceFilter(5000)">5000원 이하</button>
+                <button type="button" class="filter-price-btn" data-price="7000" onclick="setPriceFilter(7000)">7000원 이하</button>
+                <button type="button" class="filter-price-btn" data-price="10000" onclick="setPriceFilter(10000)">1만원 내외</button>
+            </div>
+            <label class="filter-checkbox"><input type="checkbox" id="filterPriceHas" onchange="onFilterChange()"> 가격 정보 있는 매장만</label>
+        </div>
+        <div class="filter-section">
+            <div class="filter-section-title">활발 여부</div>
+            <label class="filter-checkbox"><input type="checkbox" id="filterOnlyOften" onchange="onFilterChange()"> 활발한 매장만</label>
+        </div>
+        <div class="filter-section">
+            <div class="filter-section-title">마커 표시 방식</div>
+            <label class="filter-radio"><input type="radio" name="badgeMode" value="label" id="badgeModeLabel" checked onchange="onFilterChange()"> 없음 / 임박 / 보통 / 여유</label>
+            <label class="filter-radio"><input type="radio" name="badgeMode" value="number" id="badgeModeNumber" onchange="onFilterChange()"> 재고 숫자 표시</label>
+        </div>
     </div>
     
     <div id="map"></div>
@@ -54,6 +80,96 @@
         let currentInfoWindow = null;
         let storeMarkerMap = {};
         let storeInfoWindowMap = {};
+        let storesFilters = { priceHasValue: false, onlyOften: false, priceMax: null };
+        let badgeMode = 'label'; // 'label' or 'number'
+
+        function applyStoreFilters(list) {
+            let result = list || stores;
+            if (storesFilters.priceHasValue) {
+                result = result.filter(store => store.price || store.price === 0);
+            }
+            if (storesFilters.priceMax !== null) {
+                result = result.filter(store => {
+                    if (!store.price && store.price !== 0) return false;
+                    if (storesFilters.priceMax === 10000) {
+                        // 1만원 내외는 8000원~12000원
+                        return store.price >= 8000 && store.price <= 12000;
+                    }
+                    return store.price <= storesFilters.priceMax;
+                });
+            }
+            if (storesFilters.onlyOften) {
+                result = result.filter(store => store.often);
+            }
+            return result;
+        }
+
+        function setPriceFilter(maxPrice) {
+            // 모든 가격 버튼의 active 클래스 제거
+            document.querySelectorAll('.filter-price-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            
+            // 클릭한 버튼에 active 클래스 추가
+            const clickedBtn = document.querySelector(`.filter-price-btn[data-price="${maxPrice}"]`);
+            if (clickedBtn) {
+                if (storesFilters.priceMax === maxPrice) {
+                    // 같은 버튼을 다시 클릭하면 필터 해제
+                    storesFilters.priceMax = null;
+                    clickedBtn.classList.remove('active');
+                } else {
+                    storesFilters.priceMax = maxPrice;
+                    clickedBtn.classList.add('active');
+                }
+            }
+            
+            const filtered = applyStoreFilters(stores);
+            displayMarkers(filtered);
+        }
+
+        function toggleFilterPanel() {
+            const panel = document.getElementById('filterPanel');
+            if (!panel) return;
+            panel.classList.toggle('hidden');
+        }
+
+        // 필터 패널 외부 클릭 시 닫기
+        document.addEventListener('click', function(e) {
+            const panel = document.getElementById('filterPanel');
+            const filterBtn = document.querySelector('.filter-btn');
+            if (!panel || !filterBtn) return;
+            
+            // 필터 버튼이나 패널 내부를 클릭한 경우는 제외
+            if (filterBtn.contains(e.target) || panel.contains(e.target)) {
+                return;
+            }
+            
+            // 패널이 열려있으면 닫기
+            if (!panel.classList.contains('hidden')) {
+                panel.classList.add('hidden');
+            }
+        });
+
+        function onFilterChange() {
+            const priceEl = document.getElementById('filterPriceHas');
+            const oftenEl = document.getElementById('filterOnlyOften');
+            const modeLabel = document.getElementById('badgeModeLabel');
+            storesFilters.priceHasValue = !!(priceEl && priceEl.checked);
+            storesFilters.onlyOften = !!(oftenEl && oftenEl.checked);
+            badgeMode = (modeLabel && modeLabel.checked) ? 'label' : 'number';
+            const filtered = applyStoreFilters(stores);
+            displayMarkers(filtered);
+        }
+
+        // 페이지 로드 시 가격 필터 상태 복원
+        window.addEventListener('load', function() {
+            if (storesFilters.priceMax !== null) {
+                const activeBtn = document.querySelector(`.filter-price-btn[data-price="${storesFilters.priceMax}"]`);
+                if (activeBtn) {
+                    activeBtn.classList.add('active');
+                }
+            }
+        });
 
         // 줌이 이 값보다 작거나 같으면 클러스터(큰 원) 표시
         // (원하시면 “확대할수록 큰 원” 동작으로 반대로도 바꿔드릴게요)
@@ -121,7 +237,7 @@
                 if (error) throw error;
 
                 stores = data || [];
-                displayMarkers(stores);
+                displayMarkers(applyStoreFilters(stores));
             } catch (error) {
                 console.error('매장 데이터 로드 오류:', error);
             }
@@ -160,19 +276,57 @@
                 const number = parseInt(store.number) || 0;
                 const position = new naver.maps.LatLng(lat, lng);
 
-                // 여유(30+)=full, 중간(1~29)=midium, 적음(0)=less | 30개 이하면 품절 임박
-                let markerImg = number >= 30 ? 'full.png' : (number >= 1 ? 'midium.png' : 'less.png');
-                let bgColor, textColor;
+                // 없음(0)=none, 품절임박(1~9)=low, 보통(10~48)=normal, 여유(50+)=high
+                let category;
                 if (number === 0) {
+                    category = 'none';
+                } else if (number < 10) {
+                    category = 'low';
+                } else if (number < 49) {
+                    category = 'normal';
+                } else {
+                    category = 'high';
+                }
+
+                let markerImg;
+                if (category === 'none') {
+                    markerImg = 'none.png';
+                } else if (category === 'low') {
+                    markerImg = 'less.png';
+                } else if (category === 'normal') {
+                    markerImg = 'midium.png';
+                } else {
+                    markerImg = 'full.png';
+                }
+
+                let bgColor, textColor;
+                if (category === 'none') {
                     bgColor = '#473b36';
                     textColor = '#ffffff';
-                } else if (number < 30) {
+                } else if (category === 'low') {
                     bgColor = '#f07e4d';
+                    textColor = '#ffffff';
+                } else if (category === 'normal') {
+                    bgColor = '#21b570';
                     textColor = '#ffffff';
                 } else {
                     bgColor = '#21b570';
                     textColor = '#ffffff';
                 }
+                const isOften = !!store.often;
+                const badgeBorderColor = isOften ? '#ffffff' : '#3b3330';
+
+                let labelText;
+                if (category === 'none') {
+                    labelText = '없음';
+                } else if (category === 'low') {
+                    labelText = '임박';
+                } else if (category === 'normal') {
+                    labelText = '보통';
+                } else {
+                    labelText = '여유';
+                }
+                const badgeText = badgeMode === 'number' ? String(number) : labelText;
 
                 // 커스텀 마커 HTML
                 const markerContent = `
@@ -186,18 +340,18 @@
                             background-color: ${bgColor};
                             color: ${textColor};
                             border-radius: 9px;
-                            min-width: 28px;
+                            min-width: 24px;
                             height: 24px;
-                            padding: 0 11px;
+                            padding: 0 9px;
                             display: inline-flex;
                             align-items: center;
                             justify-content: center;
                             font-size: 13px;
                             font-weight: bold;
-                            border: 1px solid white;
+                            border: 1px solid ${badgeBorderColor};
                             box-shadow: 0 2px 4px rgba(0,0,0,0.3);
                             box-sizing: border-box;
-                        ">${number}</div>
+                        ">${badgeText}</div>
                     </div>
                 `;
 
@@ -216,14 +370,18 @@
 
                 // 재고 상태 텍스트 결정
                 let statusText, statusColor, statusBgColor;
-                if (number === 0) {
-                    statusText = '품절';
+                if (category === 'none') {
+                    statusText = '없음';
                     statusColor = '#e74c3c';
                     statusBgColor = '#fee';
-                } else if (number < 30) {
-                    statusText = '품절 임박';
+                } else if (category === 'low') {
+                    statusText = '임박';
                     statusColor = '#f39c12';
                     statusBgColor = '#fff4e6';
+                } else if (category === 'normal') {
+                    statusText = '보통';
+                    statusColor = '#27ae60';
+                    statusBgColor = '#e8f5e9';
                 } else {
                     statusText = '여유';
                     statusColor = '#27ae60';
@@ -302,6 +460,8 @@
                                 </div>
                             </div>
                             ${timeAgo ? `<p style="margin: 0 0 10px 0; font-size: 12px; color: #999;">${timeAgo} 업데이트</p>` : ''}
+                            <p style="margin: 0 0 6px 0; font-size: 13px; color: #666;">가격: ${((store.price || store.price === 0) ? Number(store.price).toLocaleString('ko-KR') + '원' : '정보 없음')}</p>
+                            <p style="margin: 0 0 10px 0; font-size: 13px; color: #666;">활발 여부: ${store.often ? '활발한 매장' : '일반'}</p>
                             <p style="margin: 0 0 10px 0; font-size: 14px; color: #666; line-height: 1.5;">${plaintext}</p>
                             <p style="margin: 0 0 12px 0; font-size: 13px; color: #999;">${store.address || ''}</p>
                             ${naverMapUrl ? `<a href="${naverMapUrl}" target="_blank" style="display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 12px 16px; background: #2ec95d; color: white; text-decoration: none; border-radius: 8px; font-size: 15px; font-weight: 600; text-align: center; box-sizing: border-box;"><img src="https://i.namu.wiki/i/S7V8Htt8LRUHYE5barta7QNNYklp8ZHZcYlMG4er6vD0XV1QsxWpkgb__Z7AJ0_-BzZsTdp3jJIERn81ttc_UQ.webp" style="width: 20px; height: 20px; border-radius: 4px; object-fit: contain;" alt="네이버 지도">네이버 지도에서 보기 →</a>` : ''}
@@ -482,7 +642,7 @@
             function cancelSearch() {
                 searchInput.value = '';
                 clearSearchResults();
-                displayMarkers(stores);
+                displayMarkers(applyStoreFilters(stores));
             }
             
             // 모바일에서 검색 영역 포커스 시 사장님 버튼 숨기기
@@ -528,10 +688,11 @@
                 const searchTerm = e.target.value.toLowerCase().trim();
                 
                 if (searchTerm === '') {
-                    displayMarkers(stores);
+                    displayMarkers(applyStoreFilters(stores));
                     clearSearchResults();
                 } else {
-                    const filtered = stores.filter(store => 
+                    const baseList = applyStoreFilters(stores);
+                    const filtered = baseList.filter(store => 
                         (store.subject && store.subject.toLowerCase().includes(searchTerm)) ||
                         (store.address && store.address.toLowerCase().includes(searchTerm)) ||
                         (store.plaintext && store.plaintext.toLowerCase().includes(searchTerm))
@@ -567,7 +728,7 @@
                         statusText = '품절';
                         statusColor = '#e74c3c';
                     } else if (number < 30) {
-                        statusText = '품절 임박';
+                        statusText = '임박';
                         statusColor = '#f39c12';
                     } else {
                         statusText = '여유';

@@ -118,6 +118,11 @@
                 </div>
 
                 <div class="form-group">
+                    <label>가격 (원)</label>
+                    <input type="number" id="price" min="0" step="1" placeholder="예: 12000">
+                </div>
+
+                <div class="form-group">
                     <label>홍보 문구</label>
                     <textarea id="plaintext" placeholder="매장에 대한 간단한 소개를 작성해주세요." oninput="syncPlaintext()"></textarea>
                 </div>
@@ -309,6 +314,7 @@
                     document.getElementById('location').value = data.location || '';
                     document.getElementById('address').value = data.address || '';
                     document.getElementById('subject').value = data.subject || '';
+                    document.getElementById('price').value = (data.price || data.price === 0) ? data.price : '';
                     document.getElementById('plaintext').value = data.plaintext || '';
                     document.getElementById('plaintextInventory').value = data.plaintext || '';
                     document.getElementById('url').value = data.url || '';
@@ -520,6 +526,7 @@
             const location = document.getElementById('location').value.trim();
             const address = document.getElementById('address').value.trim();
             const subject = document.getElementById('subject').value.trim();
+            const priceValue = document.getElementById('price').value.trim();
             const plaintext = document.getElementById('plaintext').value.trim();
             const url = document.getElementById('url').value.trim();
             const number = parseInt(document.getElementById('inventoryNumber').value || 0);
@@ -556,6 +563,13 @@
                     number: number,
                     checked: 'false'
                 };
+
+                if (priceValue !== '') {
+                    const numericPrice = Number(priceValue);
+                    storeData.price = isNaN(numericPrice) ? null : numericPrice;
+                } else {
+                    storeData.price = null;
+                }
 
                 if (imgUrl) storeData.img = imgUrl;
                 if (govUrl) storeData.gov = govUrl;
