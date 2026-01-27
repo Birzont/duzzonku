@@ -68,9 +68,27 @@
 
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
     <script>
-        // Supabase 클라이언트 초기화
-        const { createClient } = supabase;
-        const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        // config.js 로드 확인 및 Supabase 클라이언트 초기화
+        let supabaseClient = null;
+        
+        function initSupabase() {
+            if (typeof SUPABASE_URL === 'undefined' || typeof SUPABASE_ANON_KEY === 'undefined') {
+                console.error('config.js가 로드되지 않았습니다. SUPABASE_URL과 SUPABASE_ANON_KEY를 확인해주세요.');
+                return false;
+            }
+            
+            try {
+                const { createClient } = supabase;
+                supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+                return true;
+            } catch (error) {
+                console.error('Supabase 클라이언트 초기화 실패:', error);
+                return false;
+            }
+        }
+        
+        // 즉시 초기화 시도
+        initSupabase();
 
         let map;
         let markers = [];
@@ -228,6 +246,13 @@
 
         // 매장 데이터 로드
         async function loadStores() {
+            if (!supabaseClient) {
+                if (!initSupabase()) {
+                    console.error('Supabase 클라이언트를 초기화할 수 없습니다.');
+                    return;
+                }
+            }
+            
             try {
                 const { data, error } = await supabaseClient
                     .from('doozonku')
