@@ -68,16 +68,18 @@
             <div class="card inventory-card">
                 <h3>실시간 재고 관리</h3>
                 <div id="inventoryUpdateTime" class="inventory-update-time"></div>
-                <div class="inventory-control">
-                    <button onclick="decreaseInventory()">−</button>
-                    <input type="number" id="inventoryNumber" value="0" min="0" onchange="validateInventory()">
-                    <button onclick="increaseInventory()">+</button>
+                <input type="hidden" id="inventoryNumber" value="0">
+                <div class="inventory-level-btns">
+                    <button type="button" class="inventory-level-btn inventory-level-none" data-value="0" onclick="setInventoryLevel(0)">없음</button>
+                    <button type="button" class="inventory-level-btn inventory-level-imminent" data-value="10" onclick="setInventoryLevel(10)">임박</button>
+                    <button type="button" class="inventory-level-btn inventory-level-normal" data-value="40" onclick="setInventoryLevel(40)">보통</button>
+                    <button type="button" class="inventory-level-btn inventory-level-plenty" data-value="70" onclick="setInventoryLevel(70)">여유</button>
                 </div>
                 <div class="form-group" style="margin-top: 20px;">
                     <label>홍보 문구</label>
                     <textarea id="plaintextInventory" placeholder="매장에 대한 간단한 소개를 작성해주세요." oninput="syncPlaintextFromInventory()" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; font-family: inherit; resize: vertical; min-height: 80px;"></textarea>
                 </div>
-                <button class="btn-save" onclick="saveInventory()">재고 업데이트</button>
+                <button class="btn-save" onclick="savePlaintextOnly()">홍보문구 업데이트</button>
             </div>
 
             <!-- 매장 정보 관리 -->
@@ -339,7 +341,9 @@
 
                 if (data) {
                     currentStoreId = data.id;
-                    document.getElementById('inventoryNumber').value = data.number || 0;
+                    const num = data.number != null ? data.number : 0;
+                    document.getElementById('inventoryNumber').value = num;
+                    updateInventoryLevelUI(num);
                     document.getElementById('location').value = data.location || '';
                     document.getElementById('address').value = data.address || '';
                     document.getElementById('subject').value = data.subject || '';
@@ -379,33 +383,73 @@
                     document.getElementById('connectedStoreInfo').style.display = 'none';
                     document.getElementById('storeCodeDisplayGroup').style.display = 'none';
                     document.getElementById('storeCodeDisplay').value = '';
+                    document.getElementById('inventoryNumber').value = 0;
+                    updateInventoryLevelUI(0);
                 }
             } catch (error) {
                 console.error('예상치 못한 오류:', error);
             }
         }
 
-        // 재고 증가
-        function increaseInventory() {
-            const input = document.getElementById('inventoryNumber');
-            input.value = parseInt(input.value || 0) + 1;
+        // 재고 레벨 UI 갱신 (로드 시 어떤 버튼이 선택됐는지 표시)
+        function updateInventoryLevelUI(value) {
+            const num = parseInt(value || 0, 10);
+            const normalized = num <= 5 ? 0 : num <= 25 ? 10 : num <= 55 ? 40 : 70;
+            document.querySelectorAll('.inventory-level-btn').forEach(btn => {
+                btn.classList.toggle('selected', parseInt(btn.getAttribute('data-value'), 10) === normalized);
+            });
         }
 
-        // 재고 감소
-        function decreaseInventory() {
+        // 재고 레벨 선택: 없음=0, 임박=10, 보통=40, 여유=70 → 즉시 저장
+        async function setInventoryLevel(value) {
             const input = document.getElementById('inventoryNumber');
-            const current = parseInt(input.value || 0);
-            if (current > 0) {
-                input.value = current - 1;
+            input.value = value;
+            updateInventoryLevelUI(value);
+            await saveInventoryNumber();
+        }
+
+        // 재고 숫자만 즉시 저장 (버튼 클릭 시 호출)
+        async function saveInventoryNumber() {
+            const number = parseInt(document.getElementById('inventoryNumber').value || 0, 10);
+            if (!currentStoreId) {
+                showAlert('dashboardView', '먼저 매장 정보를 등록하거나 매장 코드로 연결해주세요.', 'error');
+                return;
+            }
+            try {
+                const { data, error } = await supabaseClient
+                    .from('doozonku')
+                    .update({ number: number })
+                    .eq('id', currentStoreId)
+                    .select('updated_at')
+                    .single();
+                if (error) throw error;
+                if (data && data.updated_at) updateInventoryTime(data.updated_at);
+                showAlert('dashboardView', '재고가 업데이트되었습니다.', 'success');
+            } catch (error) {
+                showAlert('dashboardView', '재고 업데이트 실패: ' + error.message, 'error');
             }
         }
 
-        // 재고 유효성 검사
-        function validateInventory() {
-            const input = document.getElementById('inventoryNumber');
-            const value = parseInt(input.value || 0);
-            if (value < 0) {
-                input.value = 0;
+        // 홍보문구만 저장
+        async function savePlaintextOnly() {
+            const plaintext = document.getElementById('plaintextInventory').value.trim();
+            if (!currentStoreId) {
+                showAlert('dashboardView', '먼저 매장 정보를 등록하거나 매장 코드로 연결해주세요.', 'error');
+                return;
+            }
+            try {
+                const { data, error } = await supabaseClient
+                    .from('doozonku')
+                    .update({ plaintext: plaintext })
+                    .eq('id', currentStoreId)
+                    .select('updated_at')
+                    .single();
+                if (error) throw error;
+                document.getElementById('plaintext').value = plaintext;
+                if (data && data.updated_at) updateInventoryTime(data.updated_at);
+                showAlert('dashboardView', '홍보문구가 업데이트되었습니다.', 'success');
+            } catch (error) {
+                showAlert('dashboardView', '홍보문구 업데이트 실패: ' + error.message, 'error');
             }
         }
 
@@ -451,40 +495,6 @@
         function syncPlaintextFromInventory() {
             const plaintextValue = document.getElementById('plaintextInventory').value;
             document.getElementById('plaintext').value = plaintextValue;
-        }
-
-        // 재고만 저장
-        async function saveInventory() {
-            const number = parseInt(document.getElementById('inventoryNumber').value || 0);
-            const plaintext = document.getElementById('plaintextInventory').value.trim();
-
-            if (!currentStoreId) {
-                showAlert('dashboardView', '먼저 매장 정보를 등록해주세요.', 'error');
-                return;
-            }
-
-            try {
-                const { data, error } = await supabaseClient
-                    .from('doozonku')
-                    .update({ number: number, plaintext: plaintext })
-                    .eq('id', currentStoreId)
-                    .select('updated_at')
-                    .single();
-
-                if (error) throw error;
-
-                // 업데이트 시간 표시
-                if (data && data.updated_at) {
-                    updateInventoryTime(data.updated_at);
-                } else {
-                    // updated_at이 없으면 현재 시간 사용
-                    updateInventoryTime(new Date().toISOString());
-                }
-
-                showAlert('dashboardView', '재고가 업데이트되었습니다!', 'success');
-            } catch (error) {
-                showAlert('dashboardView', '재고 업데이트 실패: ' + error.message, 'error');
-            }
         }
 
         // 이미지 미리보기
