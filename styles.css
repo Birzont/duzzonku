@@ -649,15 +649,15 @@ body {
 
 .inventory-level-btns {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
+  align-items: stretch;
+  gap: 10px;
   margin-bottom: 20px;
 }
 
 .inventory-level-btn {
-  padding: 14px 24px;
+  flex: 1;
+  min-width: 0;
+  padding: 14px 12px;
   border: none;
   border-radius: 8px;
   font-size: 15px;
@@ -681,15 +681,15 @@ body {
 }
 
 .inventory-level-imminent {
-  background-color: #e65100;
+  background-color: #e69e05;
 }
 
 .inventory-level-normal {
-  background-color: #2e7d32;
+  background-color: #2fcc46;
 }
 
 .inventory-level-plenty {
-  background-color: #5d4037;
+  background-color: #7a5e4c;
 }
 
 .inventory-update-time {
