@@ -515,6 +515,18 @@
             });
         };
 
+        window.adminmapSetNumber = function(storeId, number) {
+            supabaseClient.from('doozonku').update({ number: number }).eq('id', storeId).then(function(res) {
+                if (res.error) {
+                    showAlert('재고 변경 실패: ' + res.error.message, 'error');
+                    return;
+                }
+                var label = number === -1 ? '(정보없음)' : (number === 0 ? '소진' : (number === 10 ? '임박' : (number === 40 ? '보통' : '여유')));
+                showAlert('재고를 ' + label + '(으)로 설정했습니다.', 'success');
+                loadStores();
+            });
+        };
+
         function displayMarkers(storeList) {
             markers.forEach(function(m) { m.setMap(null); });
             markers = [];
@@ -625,6 +637,15 @@
                     storeCodeRow +
                     (showStatusBlock ? '<div style="background:' + statusBadgeBg + ';padding:10px 12px;border-radius:8px;margin-bottom:10px;text-align:center;">' +
                     '<span style="font-size:15px;font-weight:600;color:white;">' + statusText + '</span></div>' : '') +
+                    '<div style="margin:0 0 10px 0;font-size:12px;color:#666;">' +
+                    '<p style="margin:0 0 4px 0;">재고 설정</p>' +
+                    '<div style="display:flex;flex-wrap:wrap;gap:6px;">' +
+                    '<button type="button" onclick="window.adminmapSetNumber(\'' + storeIdEscaped + '\', -1)" style="padding:6px 10px;border-radius:8px;font-size:12px;cursor:pointer;border:none;background:#755541;color:#fff;">(정보없음)</button>' +
+                    '<button type="button" onclick="window.adminmapSetNumber(\'' + storeIdEscaped + '\', 0)" style="padding:6px 10px;border-radius:8px;font-size:12px;cursor:pointer;border:none;background:#363331;color:#fff;">소진</button>' +
+                    '<button type="button" onclick="window.adminmapSetNumber(\'' + storeIdEscaped + '\', 10)" style="padding:6px 10px;border-radius:8px;font-size:12px;cursor:pointer;border:none;background:#e6ab0b;color:#fff;">임박</button>' +
+                    '<button type="button" onclick="window.adminmapSetNumber(\'' + storeIdEscaped + '\', 40)" style="padding:6px 10px;border-radius:8px;font-size:12px;cursor:pointer;border:none;background:#22bf61;color:#fff;">보통</button>' +
+                    '<button type="button" onclick="window.adminmapSetNumber(\'' + storeIdEscaped + '\', 70)" style="padding:6px 10px;border-radius:8px;font-size:12px;cursor:pointer;border:none;background:#0e82e8;color:#fff;">여유</button>' +
+                    '</div></div>' +
                     '<p style="margin:0 0 6px 0;font-size:13px;color:#666;">가격: ' + priceText + '</p>' +
                     '<p style="margin:0 0 6px 0;font-size:13px;color:#666;">활발 여부: ' + oftenText + '</p>' +
                     '<div style="margin:0 0 10px 0;font-size:12px;color:#666;">' +
