@@ -665,6 +665,17 @@ body {
   color: #fff;
   cursor: pointer;
   transition: opacity 0.2s, box-shadow 0.2s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.inventory-level-btn img {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+  flex-shrink: 0;
 }
 
 .inventory-level-btn:hover {
@@ -677,19 +688,19 @@ body {
 }
 
 .inventory-level-none {
-  background-color: #1a1a1a;
+  background-color: #363331;
 }
 
 .inventory-level-imminent {
-  background-color: #e69e05;
+  background-color: #e6ab0b;
 }
 
 .inventory-level-normal {
-  background-color: #2fcc46;
+  background-color: #22bf61;
 }
 
 .inventory-level-plenty {
-  background-color: #7a5e4c;
+  background-color: #0e82e8;
 }
 
 .inventory-update-time {
