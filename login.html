@@ -70,7 +70,7 @@
                 <div id="inventoryUpdateTime" class="inventory-update-time"></div>
                 <input type="hidden" id="inventoryNumber" value="0">
                 <div class="inventory-level-btns">
-                    <button type="button" class="inventory-level-btn inventory-level-none" data-value="0" onclick="setInventoryLevel(0)"><img src="none.png" alt="">없음</button>
+                    <button type="button" class="inventory-level-btn inventory-level-none" data-value="0" onclick="setInventoryLevel(0)"><img src="none.png" alt="">소진</button>
                     <button type="button" class="inventory-level-btn inventory-level-imminent" data-value="10" onclick="setInventoryLevel(10)"><img src="less.png" alt="">임박</button>
                     <button type="button" class="inventory-level-btn inventory-level-normal" data-value="40" onclick="setInventoryLevel(40)"><img src="midium.png" alt="">보통</button>
                     <button type="button" class="inventory-level-btn inventory-level-plenty" data-value="70" onclick="setInventoryLevel(70)"><img src="full.png" alt="">여유</button>
@@ -404,7 +404,7 @@
             });
         }
 
-        // 재고 레벨 선택: 없음=0, 임박=10, 보통=40, 여유=70 → 즉시 저장
+        // 재고 레벨 선택: 소진=0, 임박=10, 보통=40, 여유=70 → 즉시 저장
         async function setInventoryLevel(value) {
             const input = document.getElementById('inventoryNumber');
             input.value = value;

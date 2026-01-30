@@ -539,7 +539,7 @@
                 const isApproved = (store.checked === 'true' || store.checked === true);
                 const position = new naver.maps.LatLng(lat, lng);
 
-                // 두쫀쿠(-1), 없음(0)=none, 품절임박(1~9)=low, 보통(10~48)=normal, 여유(50+)=high
+                // (정보없음)(-1), 소진(0)=none, 임박(1~9)=low, 보통(10~48)=normal, 여유(50+)=high
                 var category;
                 if (number === -1) {
                     category = 'doozonku';
@@ -577,7 +577,7 @@
                 });
                 marker.set('inventory', isApproved && number !== -1 ? number : 0);
                 var statusText = isApproved
-                    ? (category === 'doozonku' ? '-' : (category === 'none' ? '없음' : (category === 'low' ? '임박' : (category === 'normal' ? '보통' : '여유'))))
+                    ? (category === 'doozonku' ? '(정보없음)' : (category === 'none' ? '소진' : (category === 'low' ? '임박' : (category === 'normal' ? '보통' : '여유'))))
                     : '미승인';
                 var statusColor = isApproved
                     ? (category === 'doozonku' ? '#ffffff' : (category === 'none' ? '#363331' : (category === 'low' ? '#e6ab0b' : (category === 'normal' ? '#22bf61' : '#0e82e8'))))
@@ -608,7 +608,7 @@
                 var storeCodeRow = storeCode
                     ? '<div style="margin-bottom:10px;"><p style="margin:0 0 6px 0;font-size:12px;color:#666;">매장 코드</p><div style="display:flex;gap:8px;align-items:stretch;"><input type="text" value="' + storeCode.replace(/"/g, '&quot;').replace(/</g, '&lt;') + '" readonly style="flex:1;padding:8px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px;background:#f5f5f5;"><button type="button" id="' + copyBtnId + '" onclick="window.adminmapCopyStoreCode(\'' + storeCodeEscaped + '\', \'' + copyBtnId + '\')" style="flex:1;padding:8px 12px;border:1px solid #ddd;border-radius:8px;background:#fff;cursor:pointer;font-size:13px;">📋 복사</button></div></div>'
                     : '';
-                var statusLineText = isApproved ? (number === -1 ? '-' : ('재고: ' + number + '개')) : '미승인';
+                var statusLineText = isApproved ? (number === -1 ? '(정보없음)' : (category === 'none' ? '소진' : (category === 'low' ? '임박' : (category === 'normal' ? '보통' : '여유')))) : '미승인';
                 var priceVal = store.price;
                 var priceText = (priceVal || priceVal === 0) ? Number(priceVal).toLocaleString('ko-KR') + '원' : '정보 없음';
                 var oftenText = store.often ? '활발한 매장' : '일반';
@@ -623,11 +623,8 @@
                     '</div>' +
                     (store.img ? '<img src="' + store.img.replace(/"/g, '&quot;') + '" style="width:100%;max-height:150px;object-fit:cover;border-radius:8px;margin-bottom:12px;display:block;">' : '') +
                     storeCodeRow +
-                    (showStatusBlock ? '<div style="background:' + statusBgColor + ';padding:10px 12px;border-radius:8px;margin-bottom:10px;">' +
-                    '<div style="display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;">' +
-                    '<span style="font-weight:bold;font-size:15px;color:' + statusColor + ';">' + statusLineText + '</span>' +
-                    '<span style="padding:4px 10px;background:' + statusBadgeBg + ';color:white;border-radius:12px;font-size:12px;font-weight:600;">' + statusText + '</span>' +
-                    '</div></div>' : '') +
+                    (showStatusBlock ? '<div style="background:' + statusBadgeBg + ';padding:10px 12px;border-radius:8px;margin-bottom:10px;text-align:center;">' +
+                    '<span style="font-size:15px;font-weight:600;color:white;">' + statusText + '</span></div>' : '') +
                     '<p style="margin:0 0 6px 0;font-size:13px;color:#666;">가격: ' + priceText + '</p>' +
                     '<p style="margin:0 0 6px 0;font-size:13px;color:#666;">활발 여부: ' + oftenText + '</p>' +
                     '<div style="margin:0 0 10px 0;font-size:12px;color:#666;">' +
@@ -644,6 +641,7 @@
                     (timeAgo ? '<p style="margin:0 0 10px 0;font-size:12px;color:#999;">' + timeAgo + ' 업데이트</p>' : '') +
                     '<p style="margin:0 0 10px 0;font-size:14px;color:#666;line-height:1.5;">' + (plaintext || '-') + '</p>' +
                     '<p style="margin:0 0 12px 0;font-size:13px;color:#999;">' + (store.address || '').replace(/</g, '&lt;') + '</p>' +
+                    '<p style="margin:0 0 12px 0;font-size:13px;"><a href="#" onclick="return false;" style="color:#999;text-decoration:none;">점주님이신가요?</a></p>' +
                     (naverMapUrl ? '<a href="' + naverMapUrl + '" target="_blank" rel="noopener" style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:12px 16px;background:#2ec95d;color:white;text-decoration:none;border-radius:8px;font-size:15px;font-weight:600;text-align:center;box-sizing:border-box;"><img src="https://i.namu.wiki/i/S7V8Htt8LRUHYE5barta7QNNYklp8ZHZcYlMG4er6vD0XV1QsxWpkgb__Z7AJ0_-BzZsTdp3jJIERn81ttc_UQ.webp" style="width:20px;height:20px;border-radius:4px;object-fit:contain;" alt="네이버 지도">네이버 지도에서 보기 →</a>' : '') +
                     '</div></div>';
                 const infoWindow = new naver.maps.InfoWindow({
@@ -769,7 +767,7 @@
                     filtered.slice(0, maxItems).forEach(function(store) {
                         var number = parseInt(store.number, 10);
                         var num = isNaN(number) ? 0 : number;
-                        var statusText = number === -1 ? '-' : (num === 0 ? '품절' : (num < 30 ? '임박' : '여유'));
+                        var statusText = number === -1 ? '(정보없음)' : (num === 0 ? '소진' : (num < 10 ? '임박' : (num < 49 ? '보통' : '여유')));
                         var statusColor = number === -1 ? '#755541' : (num === 0 ? '#363331' : (num < 30 ? '#e6ab0b' : '#0e82e8'));
                         var item = document.createElement('div');
                         item.className = 'search-result-item';

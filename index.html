@@ -68,7 +68,7 @@
         </div>
         <!-- <div class="filter-section">
             <div class="filter-section-title">마커 표시 방식</div>
-            <label class="filter-radio"><input type="radio" name="badgeMode" value="label" id="badgeModeLabel" checked onchange="onFilterChange()"> 없음 / 임박 / 보통 / 여유</label>
+            <label class="filter-radio"><input type="radio" name="badgeMode" value="label" id="badgeModeLabel" checked onchange="onFilterChange()"> 소진 / 임박 / 보통 / 여유</label>
         </div> -->
     </div>
     
@@ -316,7 +316,7 @@
                 const num = isNaN(number) ? 0 : number;
                 const position = new naver.maps.LatLng(lat, lng);
 
-                // 두쫀쿠(-1), 없음(0)=none, 품절임박(1~9)=low, 보통(10~48)=normal, 여유(50+)=high
+                // (정보없음)(-1), 소진(0)=none, 임박(1~9)=low, 보통(10~48)=normal, 여유(50+)=high
                 let category;
                 if (number === -1) {
                     category = 'doozonku';
@@ -367,7 +367,7 @@
                 if (category === 'doozonku') {
                     labelText = '-';
                 } else if (category === 'none') {
-                    labelText = '없음';
+                    labelText = '소진';
                 } else if (category === 'low') {
                     labelText = '임박';
                 } else if (category === 'normal') {
@@ -420,34 +420,34 @@
                 // 재고 상태 텍스트 결정 (뱃지 색: 없음 #363331, 임박 #e6ab0b, 보통 #22bf61, 여유 #0e82e8, -1은 "-" 배경 #755541)
                 let statusText, statusColor, statusBgColor, statusDisplayLine, showStatusBlock;
                 if (category === 'doozonku') {
-                    statusText = '-';
+                    statusText = '(정보없음)';
                     statusColor = '#ffffff';
                     statusBgColor = '#755541';
-                    statusDisplayLine = '-';
+                    statusDisplayLine = '(정보없음)';
                     showStatusBlock = true;
                 } else if (category === 'none') {
-                    statusText = '없음';
+                    statusText = '소진';
                     statusColor = '#363331';
                     statusBgColor = '#f5f0ef';
-                    statusDisplayLine = '재고: ' + number + '개';
+                    statusDisplayLine = '소진';
                     showStatusBlock = true;
                 } else if (category === 'low') {
                     statusText = '임박';
                     statusColor = '#e6ab0b';
                     statusBgColor = '#fef8e6';
-                    statusDisplayLine = '재고: ' + number + '개';
+                    statusDisplayLine = '임박';
                     showStatusBlock = true;
                 } else if (category === 'normal') {
                     statusText = '보통';
                     statusColor = '#22bf61';
                     statusBgColor = '#e8f8ee';
-                    statusDisplayLine = '재고: ' + number + '개';
+                    statusDisplayLine = '보통';
                     showStatusBlock = true;
                 } else {
                     statusText = '여유';
                     statusColor = '#0e82e8';
                     statusBgColor = '#e6f2fc';
-                    statusDisplayLine = '재고: ' + number + '개';
+                    statusDisplayLine = '여유';
                     showStatusBlock = true;
                 }
                 const statusBadgeBg = category === 'doozonku' ? statusBgColor : statusColor;
@@ -517,17 +517,15 @@
                                 </button>
                             </div>
                             ${store.img ? `<img src="${store.img}" style="width: 100%; max-height: 150px; object-fit: cover; border-radius: 8px; margin-bottom: 12px; display: block;">` : ''}
-                            ${showStatusBlock ? `<div style="background: ${statusBgColor}; padding: 10px 12px; border-radius: 8px; margin-bottom: 10px;">
-                                <div style="display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap;">
-                                    <span style="font-weight: bold; font-size: 15px; color: ${statusColor};">${statusDisplayLine}</span>
-                                    <span style="padding: 4px 10px; background: ${statusBadgeBg}; color: white; border-radius: 12px; font-size: 12px; font-weight: 600;">${statusText}</span>
-                                </div>
+                            ${showStatusBlock ? `<div style="background: ${statusBadgeBg}; padding: 10px 12px; border-radius: 8px; margin-bottom: 10px; text-align: center;">
+                                <span style="font-size: 15px; font-weight: 600; color: white;">${statusText}</span>
                             </div>` : ''}
                             ${timeAgo ? `<p style="margin: 0 0 10px 0; font-size: 12px; color: #999;">${timeAgo} 업데이트</p>` : ''}
                             <p style="margin: 0 0 6px 0; font-size: 13px; color: #666;">가격: ${((store.price || store.price === 0) ? Number(store.price).toLocaleString('ko-KR') + '원' : '정보 없음')}</p>
                             <p style="margin: 0 0 10px 0; font-size: 13px; color: #666;">활발 여부: ${store.often ? '활발한 매장' : '일반'}</p>
                             <p style="margin: 0 0 10px 0; font-size: 14px; color: #666; line-height: 1.5;">${plaintext}</p>
                             <p style="margin: 0 0 12px 0; font-size: 13px; color: #999;">${store.address || ''}</p>
+                            <p style="margin: 0 0 12px 0; font-size: 13px;"><a href="#" onclick="return false;" style="color: #999; text-decoration: none;">점주님이신가요?</a></p>
                             ${naverMapUrl ? `<a href="${naverMapUrl}" target="_blank" style="display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 12px 16px; background: #2ec95d; color: white; text-decoration: none; border-radius: 8px; font-size: 15px; font-weight: 600; text-align: center; box-sizing: border-box;"><img src="https://i.namu.wiki/i/S7V8Htt8LRUHYE5barta7QNNYklp8ZHZcYlMG4er6vD0XV1QsxWpkgb__Z7AJ0_-BzZsTdp3jJIERn81ttc_UQ.webp" style="width: 20px; height: 20px; border-radius: 4px; object-fit: contain;" alt="네이버 지도">네이버 지도에서 보기 →</a>` : ''}
                         </div>
                     </div>
@@ -793,17 +791,20 @@
                     // 재고 상태 결정 (두쫀쿠=-1)
                     let statusText, statusColor;
                     if (number === -1) {
-                        statusText = '-';
+                        statusText = '(정보없음)';
                         statusColor = '#755541';
                     } else if (num === 0) {
-                        statusText = '품절';
-                        statusColor = '#e74c3c';
-                    } else if (num < 30) {
+                        statusText = '소진';
+                        statusColor = '#363331';
+                    } else if (num < 10) {
                         statusText = '임박';
-                        statusColor = '#f39c12';
+                        statusColor = '#e6ab0b';
+                    } else if (num < 49) {
+                        statusText = '보통';
+                        statusColor = '#22bf61';
                     } else {
                         statusText = '여유';
-                        statusColor = '#27ae60';
+                        statusColor = '#0e82e8';
                     }
                     
                     const item = document.createElement('div');
