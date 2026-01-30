@@ -110,7 +110,7 @@
             </div>
             <div class="form-group">
                 <label>재고 수</label>
-                <input type="number" id="addNumber" value="1" min="0" placeholder="1">
+                <input type="number" id="addNumber" value="-1" min="-1" placeholder="-1">
             </div>
             <div class="form-group">
                 <label>활발 여부</label>
@@ -279,7 +279,7 @@
                     document.getElementById('addAddress').value = '';
                     document.getElementById('addPlaintext').value = '';
                     document.getElementById('addUrl').value = '';
-                    document.getElementById('addNumber').value = '1';
+                    document.getElementById('addNumber').value = '-1';
                     urlAutoFilled = false; // URL 자동 채우기 플래그 리셋
                     document.getElementById('addStoreModal').classList.add('show');
                 });
@@ -339,7 +339,7 @@
             document.getElementById('addAddress').value = '';
             document.getElementById('addPlaintext').value = '';
             document.getElementById('addUrl').value = '';
-            document.getElementById('addNumber').value = '1';
+            document.getElementById('addNumber').value = '-1';
             urlAutoFilled = false; // URL 자동 채우기 플래그 리셋
             var oftenCheckbox = document.getElementById('addOften');
             if (oftenCheckbox) oftenCheckbox.checked = false;
@@ -405,7 +405,8 @@
             }
             const plaintext = document.getElementById('addPlaintext').value.trim();
             const url = document.getElementById('addUrl').value.trim();
-            const number = parseInt(document.getElementById('addNumber').value, 10) || 0;
+            let number = parseInt(document.getElementById('addNumber').value, 10);
+            if (isNaN(number)) number = -1;
             const often = !!(document.getElementById('addOften') && document.getElementById('addOften').checked);
             const btn = document.getElementById('addStoreSubmitBtn');
             btn.disabled = true;
@@ -525,29 +526,32 @@
                     return;
                 }
                 if (isNaN(lat) || isNaN(lng)) return;
-                const number = parseInt(store.number) || 0;
+                const number = parseInt(store.number, 10);
+                const num = isNaN(number) ? 0 : number;
                 const isApproved = (store.checked === 'true' || store.checked === true);
                 const position = new naver.maps.LatLng(lat, lng);
 
-                // 없음(0)=none, 품절임박(1~9)=low, 보통(10~48)=normal, 여유(50+)=high
+                // 두쫀쿠(-1), 없음(0)=none, 품절임박(1~9)=low, 보통(10~48)=normal, 여유(50+)=high
                 var category;
-                if (number === 0) {
+                if (number === -1) {
+                    category = 'doozonku';
+                } else if (num === 0) {
                     category = 'none';
-                } else if (number < 10) {
+                } else if (num < 10) {
                     category = 'low';
-                } else if (number < 49) {
+                } else if (num < 49) {
                     category = 'normal';
                 } else {
                     category = 'high';
                 }
 
-                var badgeText = isApproved ? String(number) : '미승인';
+                var badgeText = isApproved ? (number === -1 ? '두쫀쿠' : String(number)) : '미승인';
                 var isOften = !!store.often;
                 var markerImg = isApproved
-                    ? (category === 'none' ? 'none.png' : (category === 'low' ? 'less.png' : (category === 'normal' ? 'midium.png' : 'full.png')))
+                    ? (category === 'doozonku' ? 'midium.png' : (category === 'none' ? 'none.png' : (category === 'low' ? 'less.png' : (category === 'normal' ? 'midium.png' : 'full.png'))))
                     : 'duzonkus.png';
                 var badgeBg = isApproved
-                    ? (category === 'none' ? '#473b36' : (category === 'low' ? '#f07e4d' : '#21b570'))
+                    ? (category === 'doozonku' ? '#b0b0b0' : (category === 'none' ? '#473b36' : (category === 'low' ? '#f07e4d' : '#21b570')))
                     : '#6c757d';
                 var badgeFg = isApproved ? '#ffffff' : '#ffffff';
                 var badgeBorderColor = isOften ? '#ffffff' : '#3b3330';
@@ -563,15 +567,15 @@
                         anchor: new naver.maps.Point(28, 66)
                     }
                 });
-                marker.set('inventory', isApproved ? number : 0);
+                marker.set('inventory', isApproved && number !== -1 ? number : 0);
                 var statusText = isApproved
-                    ? (category === 'none' ? '없음' : (category === 'low' ? '임박' : (category === 'normal' ? '보통' : '여유')))
+                    ? (category === 'doozonku' ? '두쫀쿠' : (category === 'none' ? '없음' : (category === 'low' ? '임박' : (category === 'normal' ? '보통' : '여유'))))
                     : '미승인';
                 var statusColor = isApproved
-                    ? (category === 'none' ? '#e74c3c' : (category === 'low' ? '#f39c12' : '#27ae60'))
+                    ? (category === 'doozonku' ? '#ffffff' : (category === 'none' ? '#e74c3c' : (category === 'low' ? '#f39c12' : '#27ae60')))
                     : '#6c757d';
                 var statusBgColor = isApproved
-                    ? (category === 'none' ? '#fee' : (category === 'low' ? '#fff4e6' : '#e8f5e9'))
+                    ? (category === 'doozonku' ? '#b0b0b0' : (category === 'none' ? '#fee' : (category === 'low' ? '#fff4e6' : '#e8f5e9')))
                     : '#f0f0f0';
                 const timeAgo = getTimeAgo(store.updated_at || store.created_at);
                 let plaintext = store.plaintext || '';
@@ -594,7 +598,7 @@
                 var storeCodeRow = storeCode
                     ? '<div style="margin-bottom:10px;"><p style="margin:0 0 6px 0;font-size:12px;color:#666;">매장 코드</p><div style="display:flex;gap:8px;align-items:stretch;"><input type="text" value="' + storeCode.replace(/"/g, '&quot;').replace(/</g, '&lt;') + '" readonly style="flex:1;padding:8px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px;background:#f5f5f5;"><button type="button" id="' + copyBtnId + '" onclick="window.adminmapCopyStoreCode(\'' + storeCodeEscaped + '\', \'' + copyBtnId + '\')" style="flex:1;padding:8px 12px;border:1px solid #ddd;border-radius:8px;background:#fff;cursor:pointer;font-size:13px;">📋 복사</button></div></div>'
                     : '';
-                var statusLineText = isApproved ? ('재고: ' + number + '개') : '미승인';
+                var statusLineText = isApproved ? (number === -1 ? '두쫀쿠' : ('재고: ' + number + '개')) : '미승인';
                 var priceVal = store.price;
                 var priceText = (priceVal || priceVal === 0) ? Number(priceVal).toLocaleString('ko-KR') + '원' : '정보 없음';
                 var oftenText = store.often ? '활발한 매장' : '일반';
@@ -753,9 +757,10 @@
                     var maxItems = 8;
                     resultsContainer.innerHTML = '';
                     filtered.slice(0, maxItems).forEach(function(store) {
-                        var number = parseInt(store.number, 10) || 0;
-                        var statusText = number === 0 ? '품절' : (number < 30 ? '임박' : '여유');
-                        var statusColor = number === 0 ? '#e74c3c' : (number < 30 ? '#f39c12' : '#27ae60');
+                        var number = parseInt(store.number, 10);
+                        var num = isNaN(number) ? 0 : number;
+                        var statusText = number === -1 ? '두쫀쿠' : (num === 0 ? '품절' : (num < 30 ? '임박' : '여유'));
+                        var statusColor = number === -1 ? '#7a7a7a' : (num === 0 ? '#e74c3c' : (num < 30 ? '#f39c12' : '#27ae60'));
                         var item = document.createElement('div');
                         item.className = 'search-result-item';
                         item.innerHTML = '<div class="search-result-image">' +

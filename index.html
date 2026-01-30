@@ -69,7 +69,7 @@
         <div class="filter-section">
             <div class="filter-section-title">마커 표시 방식</div>
             <label class="filter-radio"><input type="radio" name="badgeMode" value="label" id="badgeModeLabel" checked onchange="onFilterChange()"> 없음 / 임박 / 보통 / 여유</label>
-            <label class="filter-radio"><input type="radio" name="badgeMode" value="number" id="badgeModeNumber" onchange="onFilterChange()"> 재고 숫자 표시</label>
+            <!-- <label class="filter-radio"><input type="radio" name="badgeMode" value="number" id="badgeModeNumber" onchange="onFilterChange()"> 재고 숫자 표시</label> -->
         </div>
     </div>
     
@@ -188,7 +188,8 @@
             const modeLabel = document.getElementById('badgeModeLabel');
             storesFilters.priceHasValue = !!(priceEl && priceEl.checked);
             storesFilters.onlyOften = !!(oftenEl && oftenEl.checked);
-            badgeMode = (modeLabel && modeLabel.checked) ? 'label' : 'number';
+            const modeNumber = document.getElementById('badgeModeNumber');
+            badgeMode = (modeNumber && modeNumber.checked) ? 'number' : 'label';
             const filtered = applyStoreFilters(stores);
             displayMarkers(filtered);
         }
@@ -312,23 +313,28 @@
                     return;
                 }
 
-                const number = parseInt(store.number) || 0;
+                const number = parseInt(store.number, 10);
+                const num = isNaN(number) ? 0 : number;
                 const position = new naver.maps.LatLng(lat, lng);
 
-                // 없음(0)=none, 품절임박(1~9)=low, 보통(10~48)=normal, 여유(50+)=high
+                // 두쫀쿠(-1), 없음(0)=none, 품절임박(1~9)=low, 보통(10~48)=normal, 여유(50+)=high
                 let category;
-                if (number === 0) {
+                if (number === -1) {
+                    category = 'doozonku';
+                } else if (num === 0) {
                     category = 'none';
-                } else if (number < 10) {
+                } else if (num < 10) {
                     category = 'low';
-                } else if (number < 49) {
+                } else if (num < 49) {
                     category = 'normal';
                 } else {
                     category = 'high';
                 }
 
                 let markerImg;
-                if (category === 'none') {
+                if (category === 'doozonku') {
+                    markerImg = 'midium.png';
+                } else if (category === 'none') {
                     markerImg = 'none.png';
                 } else if (category === 'low') {
                     markerImg = 'less.png';
@@ -339,7 +345,10 @@
                 }
 
                 let bgColor, textColor;
-                if (category === 'none') {
+                if (category === 'doozonku') {
+                    bgColor = '#b0b0b0';
+                    textColor = '#ffffff';
+                } else if (category === 'none') {
                     bgColor = '#473b36';
                     textColor = '#ffffff';
                 } else if (category === 'low') {
@@ -356,7 +365,9 @@
                 const badgeBorderColor = isOften ? '#ffffff' : '#3b3330';
 
                 let labelText;
-                if (category === 'none') {
+                if (category === 'doozonku') {
+                    labelText = '두쫀쿠';
+                } else if (category === 'none') {
                     labelText = '없음';
                 } else if (category === 'low') {
                     labelText = '임박';
@@ -404,28 +415,38 @@
                         anchor: new naver.maps.Point(28, 66)
                     }
                 });
-                // 클러스터 합산용 값 저장
-                marker.set('inventory', number);
+                // 클러스터 합산용 값 저장 (-1은 0으로 합산)
+                marker.set('inventory', number === -1 ? 0 : number);
 
                 // 재고 상태 텍스트 결정
-                let statusText, statusColor, statusBgColor;
-                if (category === 'none') {
+                let statusText, statusColor, statusBgColor, statusDisplayLine;
+                if (category === 'doozonku') {
+                    statusText = '두쫀쿠';
+                    statusColor = '#ffffff';
+                    statusBgColor = '#b0b0b0';
+                    statusDisplayLine = '두쫀쿠';
+                } else if (category === 'none') {
                     statusText = '없음';
                     statusColor = '#e74c3c';
                     statusBgColor = '#fee';
+                    statusDisplayLine = '재고: ' + number + '개';
                 } else if (category === 'low') {
                     statusText = '임박';
                     statusColor = '#f39c12';
                     statusBgColor = '#fff4e6';
+                    statusDisplayLine = '재고: ' + number + '개';
                 } else if (category === 'normal') {
                     statusText = '보통';
                     statusColor = '#27ae60';
                     statusBgColor = '#e8f5e9';
+                    statusDisplayLine = '재고: ' + number + '개';
                 } else {
                     statusText = '여유';
                     statusColor = '#27ae60';
                     statusBgColor = '#e8f5e9';
+                    statusDisplayLine = '재고: ' + number + '개';
                 }
+                const statusBadgeBg = category === 'doozonku' ? statusBgColor : statusColor;
 
                 // 업데이트 시간 계산
                 function getTimeAgo(dateString) {
@@ -494,8 +515,8 @@
                             ${store.img ? `<img src="${store.img}" style="width: 100%; max-height: 150px; object-fit: cover; border-radius: 8px; margin-bottom: 12px; display: block;">` : ''}
                             <div style="background: ${statusBgColor}; padding: 10px 12px; border-radius: 8px; margin-bottom: 10px;">
                                 <div style="display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap;">
-                                    <span style="font-weight: bold; font-size: 15px; color: ${statusColor};">재고: ${number}개</span>
-                                    <span style="padding: 4px 10px; background: ${statusColor}; color: white; border-radius: 12px; font-size: 12px; font-weight: 600;">${statusText}</span>
+                                    <span style="font-weight: bold; font-size: 15px; color: ${statusColor};">${statusDisplayLine}</span>
+                                    <span style="padding: 4px 10px; background: ${statusBadgeBg}; color: white; border-radius: 12px; font-size: 12px; font-weight: 600;">${statusText}</span>
                                 </div>
                             </div>
                             ${timeAgo ? `<p style="margin: 0 0 10px 0; font-size: 12px; color: #999;">${timeAgo} 업데이트</p>` : ''}
@@ -567,8 +588,11 @@
                     clusterMarker.getElement().style.cursor = 'pointer';
                 },
                 calculator: function(markerArray) {
-                    // markerArray는 클러스터에 포함된 마커 배열
-                    const sum = markerArray.reduce((acc, m) => acc + (parseInt(m.get('inventory')) || 0), 0);
+                    // markerArray는 클러스터에 포함된 마커 배열 (-1은 0으로 합산)
+                    const sum = markerArray.reduce((acc, m) => {
+                        const v = parseInt(m.get('inventory'), 10);
+                        return acc + (v === -1 || isNaN(v) ? 0 : v);
+                    }, 0);
                     // 아이콘 HTML 내부 텍스트를 sum으로 바꿔치기하기 위해,
                     // MarkerClustering의 calculator 반환값을 index + text 둘 다 활용합니다.
                     // (index는 icons 배열 인덱스 선택용)
@@ -759,14 +783,18 @@
                 resultsContainer.innerHTML = '';
 
                 list.slice(0, maxItems).forEach(store => {
-                    const number = parseInt(store.number) || 0;
+                    const number = parseInt(store.number, 10);
+                    const num = isNaN(number) ? 0 : number;
                     
-                    // 재고 상태 결정
+                    // 재고 상태 결정 (두쫀쿠=-1)
                     let statusText, statusColor;
-                    if (number === 0) {
+                    if (number === -1) {
+                        statusText = '두쫀쿠';
+                        statusColor = '#7a7a7a';
+                    } else if (num === 0) {
                         statusText = '품절';
                         statusColor = '#e74c3c';
-                    } else if (number < 30) {
+                    } else if (num < 30) {
                         statusText = '임박';
                         statusColor = '#f39c12';
                     } else {

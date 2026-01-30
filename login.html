@@ -391,9 +391,13 @@
             }
         }
 
-        // 재고 레벨 UI 갱신 (로드 시 어떤 버튼이 선택됐는지 표시)
+        // 재고 레벨 UI 갱신 (로드 시 어떤 버튼이 선택됐는지 표시, -1=두쫀쿠는 선택 없음)
         function updateInventoryLevelUI(value) {
-            const num = parseInt(value || 0, 10);
+            const num = parseInt(value, 10);
+            if (num === -1 || isNaN(num)) {
+                document.querySelectorAll('.inventory-level-btn').forEach(btn => btn.classList.remove('selected'));
+                return;
+            }
             const normalized = num <= 5 ? 0 : num <= 25 ? 10 : num <= 55 ? 40 : 70;
             document.querySelectorAll('.inventory-level-btn').forEach(btn => {
                 btn.classList.toggle('selected', parseInt(btn.getAttribute('data-value'), 10) === normalized);
