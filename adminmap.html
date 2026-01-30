@@ -109,6 +109,10 @@
                 <input type="url" id="addUrl" placeholder="https://...">
             </div>
             <div class="form-group">
+                <label>가격 (원)</label>
+                <input type="number" id="addPrice" min="0" step="1" placeholder="예: 12000">
+            </div>
+            <div class="form-group">
                 <label>재고 수</label>
                 <input type="number" id="addNumber" value="-1" min="-1" placeholder="-1">
             </div>
@@ -279,6 +283,7 @@
                     document.getElementById('addAddress').value = '';
                     document.getElementById('addPlaintext').value = '';
                     document.getElementById('addUrl').value = '';
+                    document.getElementById('addPrice').value = '';
                     document.getElementById('addNumber').value = '-1';
                     urlAutoFilled = false; // URL 자동 채우기 플래그 리셋
                     document.getElementById('addStoreModal').classList.add('show');
@@ -339,6 +344,7 @@
             document.getElementById('addAddress').value = '';
             document.getElementById('addPlaintext').value = '';
             document.getElementById('addUrl').value = '';
+            document.getElementById('addPrice').value = '';
             document.getElementById('addNumber').value = '-1';
             urlAutoFilled = false; // URL 자동 채우기 플래그 리셋
             var oftenCheckbox = document.getElementById('addOften');
@@ -361,7 +367,7 @@
             return code;
         }
 
-        function doInsertStore(locationStr, subject, address, plaintext, url, number, often, btn) {
+        function doInsertStore(locationStr, subject, address, plaintext, url, price, number, often, btn) {
             var storeData = {
                 user_id: currentUser.id,
                 location: locationStr,
@@ -369,6 +375,7 @@
                 subject: subject,
                 plaintext: plaintext || null,
                 url: url || null,
+                price: price != null && price !== '' ? (isNaN(Number(price)) ? null : Number(price)) : null,
                 number: number,
                 often: !!often,
                 checked: 'true',
@@ -405,6 +412,7 @@
             }
             const plaintext = document.getElementById('addPlaintext').value.trim();
             const url = document.getElementById('addUrl').value.trim();
+            const priceVal = document.getElementById('addPrice').value.trim();
             let number = parseInt(document.getElementById('addNumber').value, 10);
             if (isNaN(number)) number = -1;
             const often = !!(document.getElementById('addOften') && document.getElementById('addOften').checked);
@@ -413,7 +421,7 @@
 
             if (pendingCoord) {
                 var locationStr = pendingCoord.lat + ',' + pendingCoord.lng;
-                doInsertStore(locationStr, subject, address, plaintext, url, number, often, btn);
+                doInsertStore(locationStr, subject, address, plaintext, url, priceVal, number, often, btn);
                 return;
             }
 
@@ -444,7 +452,7 @@
                         return;
                     }
                     var locationStr = lat + ',' + lng;
-                    doInsertStore(locationStr, subject, address, plaintext, url, number, often, btn);
+                    doInsertStore(locationStr, subject, address, plaintext, url, priceVal, number, often, btn);
                 });
                 return true;
             }
