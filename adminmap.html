@@ -545,17 +545,19 @@
                     category = 'high';
                 }
 
-                var badgeText = isApproved ? (number === -1 ? '두쫀쿠' : String(number)) : '미승인';
+                var badgeText = isApproved ? String(number) : '미승인';
                 var isOften = !!store.often;
                 var markerImg = isApproved
-                    ? (category === 'doozonku' ? 'midium.png' : (category === 'none' ? 'none.png' : (category === 'low' ? 'less.png' : (category === 'normal' ? 'midium.png' : 'full.png'))))
+                    ? (category === 'doozonku' ? (Math.random() < 0.5 ? 'less.png' : 'midium.png') : (category === 'none' ? 'none.png' : (category === 'low' ? 'less.png' : (category === 'normal' ? 'midium.png' : 'full.png'))))
                     : 'duzonkus.png';
                 var badgeBg = isApproved
-                    ? (category === 'doozonku' ? '#b0b0b0' : (category === 'none' ? '#473b36' : (category === 'low' ? '#f07e4d' : '#21b570')))
+                    ? (category === 'none' ? '#473b36' : (category === 'low' ? '#f07e4d' : '#21b570'))
                     : '#6c757d';
                 var badgeFg = isApproved ? '#ffffff' : '#ffffff';
                 var badgeBorderColor = isOften ? '#ffffff' : '#3b3330';
-                const markerContent = '<div style="position:relative;width:56px;height:66px;cursor:pointer;">' +
+                var markerContent = category === 'doozonku'
+                    ? '<div style="position:relative;width:56px;height:66px;cursor:pointer;"><img src="' + markerImg + '" style="width:56px;height:56px;display:block;" onerror="this.src=\'duzonkus.png\'"></div>'
+                    : '<div style="position:relative;width:56px;height:66px;cursor:pointer;">' +
                     '<img src="' + markerImg + '" style="width:56px;height:56px;display:block;" onerror="this.src=\'duzonkus.png\'">' +
                     '<div style="position:absolute;top:4px;right:0;transform:translateX(48%);background:' + badgeBg + ';color:' + badgeFg + ';border-radius:9px;min-width:24px;height:24px;padding:0 9px;display:inline-flex;align-items:center;justify-content:center;font-size:13px;font-weight:bold;border:1px solid ' + badgeBorderColor + ';">' + badgeText + '</div></div>';
                 const marker = new naver.maps.Marker({
@@ -569,14 +571,15 @@
                 });
                 marker.set('inventory', isApproved && number !== -1 ? number : 0);
                 var statusText = isApproved
-                    ? (category === 'doozonku' ? '두쫀쿠' : (category === 'none' ? '없음' : (category === 'low' ? '임박' : (category === 'normal' ? '보통' : '여유'))))
+                    ? (category === 'doozonku' ? '' : (category === 'none' ? '없음' : (category === 'low' ? '임박' : (category === 'normal' ? '보통' : '여유'))))
                     : '미승인';
                 var statusColor = isApproved
-                    ? (category === 'doozonku' ? '#ffffff' : (category === 'none' ? '#e74c3c' : (category === 'low' ? '#f39c12' : '#27ae60')))
+                    ? (category === 'none' ? '#e74c3c' : (category === 'low' ? '#f39c12' : '#27ae60'))
                     : '#6c757d';
                 var statusBgColor = isApproved
-                    ? (category === 'doozonku' ? '#b0b0b0' : (category === 'none' ? '#fee' : (category === 'low' ? '#fff4e6' : '#e8f5e9')))
+                    ? (category === 'none' ? '#fee' : (category === 'low' ? '#fff4e6' : '#e8f5e9'))
                     : '#f0f0f0';
+                var showStatusBlock = category !== 'doozonku';
                 const timeAgo = getTimeAgo(store.updated_at || store.created_at);
                 let plaintext = store.plaintext || '';
                 if (plaintext) {
@@ -598,7 +601,7 @@
                 var storeCodeRow = storeCode
                     ? '<div style="margin-bottom:10px;"><p style="margin:0 0 6px 0;font-size:12px;color:#666;">매장 코드</p><div style="display:flex;gap:8px;align-items:stretch;"><input type="text" value="' + storeCode.replace(/"/g, '&quot;').replace(/</g, '&lt;') + '" readonly style="flex:1;padding:8px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px;background:#f5f5f5;"><button type="button" id="' + copyBtnId + '" onclick="window.adminmapCopyStoreCode(\'' + storeCodeEscaped + '\', \'' + copyBtnId + '\')" style="flex:1;padding:8px 12px;border:1px solid #ddd;border-radius:8px;background:#fff;cursor:pointer;font-size:13px;">📋 복사</button></div></div>'
                     : '';
-                var statusLineText = isApproved ? (number === -1 ? '두쫀쿠' : ('재고: ' + number + '개')) : '미승인';
+                var statusLineText = isApproved ? (number === -1 ? '' : ('재고: ' + number + '개')) : '미승인';
                 var priceVal = store.price;
                 var priceText = (priceVal || priceVal === 0) ? Number(priceVal).toLocaleString('ko-KR') + '원' : '정보 없음';
                 var oftenText = store.often ? '활발한 매장' : '일반';
@@ -613,11 +616,11 @@
                     '</div>' +
                     (store.img ? '<img src="' + store.img.replace(/"/g, '&quot;') + '" style="width:100%;max-height:150px;object-fit:cover;border-radius:8px;margin-bottom:12px;display:block;">' : '') +
                     storeCodeRow +
-                    '<div style="background:' + statusBgColor + ';padding:10px 12px;border-radius:8px;margin-bottom:10px;">' +
+                    (showStatusBlock ? '<div style="background:' + statusBgColor + ';padding:10px 12px;border-radius:8px;margin-bottom:10px;">' +
                     '<div style="display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;">' +
                     '<span style="font-weight:bold;font-size:15px;color:' + statusColor + ';">' + statusLineText + '</span>' +
                     '<span style="padding:4px 10px;background:' + statusColor + ';color:white;border-radius:12px;font-size:12px;font-weight:600;">' + statusText + '</span>' +
-                    '</div></div>' +
+                    '</div></div>' : '') +
                     '<p style="margin:0 0 6px 0;font-size:13px;color:#666;">가격: ' + priceText + '</p>' +
                     '<p style="margin:0 0 6px 0;font-size:13px;color:#666;">활발 여부: ' + oftenText + '</p>' +
                     '<div style="margin:0 0 10px 0;font-size:12px;color:#666;">' +
@@ -759,8 +762,8 @@
                     filtered.slice(0, maxItems).forEach(function(store) {
                         var number = parseInt(store.number, 10);
                         var num = isNaN(number) ? 0 : number;
-                        var statusText = number === -1 ? '두쫀쿠' : (num === 0 ? '품절' : (num < 30 ? '임박' : '여유'));
-                        var statusColor = number === -1 ? '#7a7a7a' : (num === 0 ? '#e74c3c' : (num < 30 ? '#f39c12' : '#27ae60'));
+                        var statusText = number === -1 ? '' : (num === 0 ? '품절' : (num < 30 ? '임박' : '여유'));
+                        var statusColor = number === -1 ? '#999' : (num === 0 ? '#e74c3c' : (num < 30 ? '#f39c12' : '#27ae60'));
                         var item = document.createElement('div');
                         item.className = 'search-result-item';
                         item.innerHTML = '<div class="search-result-image">' +

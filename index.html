@@ -66,11 +66,10 @@
             <div class="filter-section-title">활발 여부</div>
             <label class="filter-checkbox"><input type="checkbox" id="filterOnlyOften" onchange="onFilterChange()"> 활발한 매장만</label>
         </div>
-        <div class="filter-section">
+        <!-- <div class="filter-section">
             <div class="filter-section-title">마커 표시 방식</div>
             <label class="filter-radio"><input type="radio" name="badgeMode" value="label" id="badgeModeLabel" checked onchange="onFilterChange()"> 없음 / 임박 / 보통 / 여유</label>
-            <!-- <label class="filter-radio"><input type="radio" name="badgeMode" value="number" id="badgeModeNumber" onchange="onFilterChange()"> 재고 숫자 표시</label> -->
-        </div>
+        </div> -->
     </div>
     
     <div id="map"></div>
@@ -333,7 +332,7 @@
 
                 let markerImg;
                 if (category === 'doozonku') {
-                    markerImg = 'midium.png';
+                    markerImg = Math.random() < 0.5 ? 'less.png' : 'midium.png';
                 } else if (category === 'none') {
                     markerImg = 'none.png';
                 } else if (category === 'low') {
@@ -365,9 +364,7 @@
                 const badgeBorderColor = isOften ? '#ffffff' : '#3b3330';
 
                 let labelText;
-                if (category === 'doozonku') {
-                    labelText = '두쫀쿠';
-                } else if (category === 'none') {
+                if (category === 'none') {
                     labelText = '없음';
                 } else if (category === 'low') {
                     labelText = '임박';
@@ -378,8 +375,12 @@
                 }
                 const badgeText = badgeMode === 'number' ? String(number) : labelText;
 
-                // 커스텀 마커 HTML
-                const markerContent = `
+                // 커스텀 마커 HTML (재고 -1이면 배지 없이 아이콘만, less/midium 랜덤)
+                const markerContent = category === 'doozonku'
+                    ? `<div style="position: relative; width: 56px; height: 66px; cursor: pointer;">
+                        <img src="${markerImg}" style="width: 56px; height: 56px; display: block;" onerror="this.src='duzonkus.png'">
+                    </div>`
+                    : `
                     <div style="position: relative; width: 56px; height: 66px; cursor: pointer;">
                         <img src="${markerImg}" style="width: 56px; height: 56px; display: block;" onerror="this.src='duzonkus.png'">
                         <div style="
@@ -418,33 +419,38 @@
                 // 클러스터 합산용 값 저장 (-1은 0으로 합산)
                 marker.set('inventory', number === -1 ? 0 : number);
 
-                // 재고 상태 텍스트 결정
-                let statusText, statusColor, statusBgColor, statusDisplayLine;
+                // 재고 상태 텍스트 결정 (재고 -1이면 표시 없음)
+                let statusText, statusColor, statusBgColor, statusDisplayLine, showStatusBlock;
                 if (category === 'doozonku') {
-                    statusText = '두쫀쿠';
-                    statusColor = '#ffffff';
-                    statusBgColor = '#b0b0b0';
-                    statusDisplayLine = '두쫀쿠';
+                    statusText = '';
+                    statusColor = '';
+                    statusBgColor = '';
+                    statusDisplayLine = '';
+                    showStatusBlock = false;
                 } else if (category === 'none') {
                     statusText = '없음';
                     statusColor = '#e74c3c';
                     statusBgColor = '#fee';
                     statusDisplayLine = '재고: ' + number + '개';
+                    showStatusBlock = true;
                 } else if (category === 'low') {
                     statusText = '임박';
                     statusColor = '#f39c12';
                     statusBgColor = '#fff4e6';
                     statusDisplayLine = '재고: ' + number + '개';
+                    showStatusBlock = true;
                 } else if (category === 'normal') {
                     statusText = '보통';
                     statusColor = '#27ae60';
                     statusBgColor = '#e8f5e9';
                     statusDisplayLine = '재고: ' + number + '개';
+                    showStatusBlock = true;
                 } else {
                     statusText = '여유';
                     statusColor = '#27ae60';
                     statusBgColor = '#e8f5e9';
                     statusDisplayLine = '재고: ' + number + '개';
+                    showStatusBlock = true;
                 }
                 const statusBadgeBg = category === 'doozonku' ? statusBgColor : statusColor;
 
@@ -513,12 +519,12 @@
                                 </button>
                             </div>
                             ${store.img ? `<img src="${store.img}" style="width: 100%; max-height: 150px; object-fit: cover; border-radius: 8px; margin-bottom: 12px; display: block;">` : ''}
-                            <div style="background: ${statusBgColor}; padding: 10px 12px; border-radius: 8px; margin-bottom: 10px;">
+                            ${showStatusBlock ? `<div style="background: ${statusBgColor}; padding: 10px 12px; border-radius: 8px; margin-bottom: 10px;">
                                 <div style="display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap;">
                                     <span style="font-weight: bold; font-size: 15px; color: ${statusColor};">${statusDisplayLine}</span>
                                     <span style="padding: 4px 10px; background: ${statusBadgeBg}; color: white; border-radius: 12px; font-size: 12px; font-weight: 600;">${statusText}</span>
                                 </div>
-                            </div>
+                            </div>` : ''}
                             ${timeAgo ? `<p style="margin: 0 0 10px 0; font-size: 12px; color: #999;">${timeAgo} 업데이트</p>` : ''}
                             <p style="margin: 0 0 6px 0; font-size: 13px; color: #666;">가격: ${((store.price || store.price === 0) ? Number(store.price).toLocaleString('ko-KR') + '원' : '정보 없음')}</p>
                             <p style="margin: 0 0 10px 0; font-size: 13px; color: #666;">활발 여부: ${store.often ? '활발한 매장' : '일반'}</p>
@@ -789,8 +795,8 @@
                     // 재고 상태 결정 (두쫀쿠=-1)
                     let statusText, statusColor;
                     if (number === -1) {
-                        statusText = '두쫀쿠';
-                        statusColor = '#7a7a7a';
+                        statusText = '';
+                        statusColor = '#999';
                     } else if (num === 0) {
                         statusText = '품절';
                         statusColor = '#e74c3c';
